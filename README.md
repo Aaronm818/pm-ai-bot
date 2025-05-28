@@ -195,7 +195,44 @@ public/
 └── dashboard.html           # Real-time monitoring dashboard
 
 recordings/                  # Audio recordings storage
+
+# Docker & Deployment
+Dockerfile                   # Multi-stage production Dockerfile
+.dockerignore               # Optimized Docker build context
+Makefile                    # Automated deployment commands
+deployment.env              # ACR configuration
+deployment.env.example      # Configuration template
 ```
+
+### 🐳 Docker Configuration
+
+The project includes a production-optimized Dockerfile with the following features:
+
+#### Multi-Stage Build
+
+```dockerfile
+# Stage 1: Build stage (Node.js 22 Alpine)
+FROM node:22-alpine AS builder
+# Install dependencies and build application
+
+# Stage 2: Production stage (Node.js 22 Alpine)
+FROM node:22-alpine AS production
+# Copy only production files and dependencies
+```
+
+#### Security Features
+
+- **Non-root user**: Runs as `nestjs` user (UID 1001)
+- **Minimal attack surface**: Alpine Linux base image
+- **Proper signal handling**: Uses `dumb-init` for graceful shutdowns
+- **File permissions**: Secure ownership and permissions
+
+#### Performance Optimizations
+
+- **Layer caching**: Optimized layer order for faster rebuilds
+- **Production dependencies**: Only installs runtime dependencies
+- **Clean builds**: Removes build artifacts and caches
+- **Health checks**: Built-in container health monitoring
 
 ### Available Scripts
 
@@ -213,6 +250,13 @@ npm run lint               # Run ESLint
 npm run format             # Format code with Prettier
 npm run test               # Run unit tests
 npm run test:e2e           # Run end-to-end tests
+
+# Docker & Deployment
+make help                  # Show all deployment commands
+make validate              # Validate ACR configuration
+make build-and-push        # Build and push to Azure Container Registry
+make dev-build             # Local development build
+make run-local             # Build and run locally
 ```
 
 ### API Endpoints
@@ -265,57 +309,93 @@ const DEFAULT_TTS_CONFIG = {
 
 ## 🚀 Deployment
 
-### Azure App Service
+This project includes production-ready Docker configuration and automated deployment tools for Azure.
 
-1. **Create an Azure App Service**
-2. **Configure environment variables** in the App Service settings
-3. **Set up EventGrid webhook** pointing to your App Service URL
-4. **Deploy using GitHub Actions** or Azure CLI
+### 🐳 Docker Container Registry (Recommended)
 
-### Docker Deployment
+The project includes a multi-stage Dockerfile optimized for production deployment with multi-architecture support.
 
-```dockerfile
-FROM node:18-alpine
+#### Quick Setup
 
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-
-COPY . .
-RUN npm run build
-
-EXPOSE 3000
-CMD ["npm", "run", "start:prod"]
-```
-
-### Environment Variables for Production
+1. **Configure your Azure Container Registry details**:
 
 ```bash
-ACS_CONNECTION_STRING=your-production-acs-connection-string
-BASE_URL=https://your-app-name.azurewebsites.net
-OPENAI_API_KEY=your-openai-api-key
-OPENAI_TTS_ENDPOINT=your-openai-tts-endpoint
+# Copy and edit the deployment configuration
+cp deployment.env.example deployment.env
+
+# Edit deployment.env with your ACR details
+ACR_NAME=your-acr-name
+ACR_LOGIN_SERVER=your-acr-name.azurecr.io
 ```
 
-## 🤝 Contributing
+2. **Build and push to Azure Container Registry**:
 
-We welcome contributions! This is an open-source example project designed to help developers learn Azure Communication Services.
+```bash
+# Make sure you're logged into Azure
+az login
 
-### Ways to Contribute
+# Build and push multi-architecture image (AMD64 + ARM64)
+make build-and-push
+```
 
-- 🐛 **Report Bugs**: Found an issue? Let us know!
-- 💡 **Suggest Features**: Have ideas for improvements?
-- 📖 **Improve Documentation**: Help make the docs better
-- 🔧 **Submit Pull Requests**: Code contributions are welcome
+3. **Deploy to Azure Container Instances or App Service**:
 
-### Development Setup
+```bash
+# Example: Deploy to Azure Container Instances
+az container create \
+  --resource-group myResourceGroup \
+  --name acs-teams-recording \
+  --image your-acr-name.azurecr.io/acs-teams-recording:latest \
+  --environment-variables \
+    ACS_CONNECTION_STRING="$ACS_CONNECTION_STRING" \
+    OPENAI_API_KEY="$OPENAI_API_KEY" \
+    BASE_URL="https://your-container-instance.region.azurecontainer.io"
+```
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes and test thoroughly
-4. Commit your changes: `git commit -m 'Add amazing feature'`
-5. Push to the branch: `git push origin feature/amazing-feature`
-6. Open a Pull Request
+#### Available Make Commands
+
+The included Makefile provides automated deployment workflows:
+
+```bash
+# Show all available commands
+make help
+
+# Validate your configuration
+make validate
+
+# Build and push multi-platform image (recommended)
+make build-and-push
+
+# Development commands
+make dev-build          # Quick local build
+make run-local          # Build and run locally
+make clean              # Clean up build resources
+```
+
+#### Docker Features
+
+- **Multi-stage build**: Optimized for smaller production images
+- **Multi-architecture support**: AMD64 and ARM64 (Apple Silicon compatible)
+- **Security**: Non-root user, proper file permissions
+- **Health checks**: Built-in container health monitoring
+- **Signal handling**: Proper graceful shutdown with dumb-init
+
+### 🎛️ Environment Variables for Production
+
+Set these environment variables in your deployment environment:
+
+```bash
+# Required: Azure Communication Services
+ACS_CONNECTION_STRING=your-production-acs-connection-string
+
+# Required: Public URL for webhooks
+BASE_URL=https://your-app-name.azurewebsites.net
+
+# Required: OpenAI Configuration
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_TTS_ENDPOINT=your-openai-tts-endpoint
+
+```
 
 ## 📚 Resources
 
@@ -342,6 +422,34 @@ A: This is a sample application for learning purposes. For production use, add p
 ### Q: Can I record video as well?
 
 A: Currently, this example focuses on audio recording. Video recording would require additional ACS features and storage solutions.
+
+### Q: I'm getting Docker build errors about missing public directory
+
+A: Make sure the `public/` directory is not excluded in `.dockerignore`. The included `.dockerignore` has been optimized to include necessary files while excluding development artifacts.
+
+### Q: The Makefile commands aren't working
+
+A: Ensure you have:
+- Docker with buildx support installed
+- Azure CLI installed and logged in (`az login`)
+- Proper values set in `deployment.env`
+- Run `make validate` to check your configuration
+
+### Q: How do I debug container issues?
+
+A: Use these commands to troubleshoot:
+
+```bash
+# Build locally for testing
+make dev-build
+
+# Run container locally with logs
+make run-local
+
+# Check container health
+docker ps
+docker logs <container-id>
+```
 
 ## 📄 License
 
