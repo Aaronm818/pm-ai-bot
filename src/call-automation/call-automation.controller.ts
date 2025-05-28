@@ -188,7 +188,7 @@ export class CallAutomationController {
   ): Promise<void> {
     this.logger.log(`Call disconnected: ${eventData.serverCallId}`);
     await this.callAutomationService.handleCallDisconnected(
-      eventData.callConnectionId,
+      eventData.serverCallId,
     );
   }
 
@@ -252,6 +252,28 @@ export class CallAutomationController {
     return {
       message: `Sent DTMF tone "${toneConfig.tone}" to call ${callConnectionId}`,
       toneConfig,
+    };
+  }
+
+  @Post('test/send-tts/:callConnectionId')
+  async sendTestTextToSpeech(
+    @Param('callConnectionId') callConnectionId: string,
+    @Body() body: { text?: string; voice?: string; language?: string; waitTimeMs?: number },
+  ) {
+    const ttsConfig = {
+      text: body.text || 'Hello, this is a test message from Azure Communication Services.',
+      voice: body.voice || 'en-US-JennyNeural',
+      language: body.language || 'en-US',
+      waitTimeMs: body.waitTimeMs || 3500,
+    };
+
+    await this.callAutomationService.sendTextToSpeech(
+      callConnectionId,
+      ttsConfig,
+    );
+    return {
+      message: `Sent text-to-speech to call ${callConnectionId}: "${ttsConfig.text}"`,
+      ttsConfig,
     };
   }
 

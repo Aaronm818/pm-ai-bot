@@ -7,6 +7,7 @@ import {
   DtmfTone,
   StartMediaStreamingOptions,
   StopMediaStreamingOptions,
+  TextSource,
 } from '@azure/communication-call-automation';
 import {
   CommunicationIdentifier,
@@ -23,7 +24,11 @@ import {
   DEFAULT_DTMF_CONFIG,
   DEFAULT_MEDIA_STREAMING_CONFIG,
   AudioStreamingSession,
+  TextToSpeechConfig,
+  DEFAULT_TTS_CONFIG,
 } from './call-events.types';
+import { WebSocketService } from '../websocket/websocket.service';
+import axios from 'axios';
 
 @Injectable()
 export class CallAutomationService {
@@ -34,7 +39,10 @@ export class CallAutomationService {
   private audioStreamingSessions: Map<string, AudioStreamingSession> =
     new Map();
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly webSocketService: WebSocketService,
+  ) {
     const connectionString = this.configService.get<string>(
       'ACS_CONNECTION_STRING',
     );
@@ -92,14 +100,14 @@ export class CallAutomationService {
       );
 
       // Create media streaming configuration for answer call
-      const mediaStreamingConfig = this.createMediaStreamingConfig(baseUrl);
+      const mediaStreamingConfig = this.createMediaStreamingConfig(baseUrl, serverCallId);
 
       // Answer call with media streaming options configured
       const answerCallResult = await this.callAutomationClient.answerCall(
         incomingCallContext,
         `${baseUrl}/acs/events`,
         {
-          mediaStreamingOptions: mediaStreamingConfig,
+          mediaStreamingOptions: mediaStreamingConfig
         },
       );
 
@@ -118,15 +126,15 @@ export class CallAutomationService {
       this.logger.log(`Call answered successfully: ${serverCallId}`);
       this.updateCallState(serverCallId, 'answered');
 
-      // Wait 3.5 seconds then send DTMF tone "1"
+      // Wait 3.5 seconds then send audio tone
       setTimeout(async () => {
         await this.sendAudioTone(serverCallId, DEFAULT_DTMF_CONFIG);
 
-        // Wait additional 1 second after DTMF, then start audio streaming
+        // Wait additional 1 second after sending audio tone, then start audio streaming
         setTimeout(async () => {
           await this.startAudioStreaming(serverCallId);
         }, DEFAULT_MEDIA_STREAMING_CONFIG.startDelayMs);
-      }, DEFAULT_DTMF_CONFIG.waitTimeMs);
+      }, DEFAULT_TTS_CONFIG.waitTimeMs);
     } catch (error) {
       this.logger.error(`Failed to answer call ${serverCallId}:`, error);
       throw error;
@@ -200,6 +208,125 @@ export class CallAutomationService {
         error,
       );
     }
+  }
+
+  // Send text-to-speech audio to the call using OpenAI TTS API and WebSocket
+  async sendTextToSpeech(
+    serverCallId: string,
+    ttsConfig: TextToSpeechConfig = DEFAULT_TTS_CONFIG,
+  ): Promise<void> {
+    const callConnection = this.callConnections.get(serverCallId);
+    const callSession = this.activeCalls.get(serverCallId);
+
+    if (!callConnection) {
+      this.logger.warn(`Call connection not found for ${serverCallId}`);
+      return;
+    }
+
+    if (!callSession) {
+      this.logger.warn(`Call session not found for ${serverCallId}`);
+      return;
+    }
+
+    try {
+      this.logger.log(
+        `Generating text-to-speech using OpenAI for call ${serverCallId}: "${ttsConfig.text}"`,
+      );
+
+      // Get OpenAI API key from environment
+      const openaiApiKey = this.configService.get<string>('OPENAI_API_KEY');
+      if (!openaiApiKey) {
+        throw new Error('OPENAI_API_KEY is not configured');
+      }
+      const openaiTtsEndpoint = this.configService.get<string>(
+        'OPENAI_TTS_ENDPOINT',
+      );
+      if (!openaiTtsEndpoint) {
+        throw new Error('OPENAI_TTS_ENDPOINT is not configured');
+      }
+
+      // Call OpenAI TTS API
+      const ttsResponse = await axios.post(
+        openaiTtsEndpoint,
+        {
+          model: "gpt-4o-mini-tts",
+          input: ttsConfig.text,
+          voice: this.mapVoiceToOpenAI(ttsConfig.voice || 'en-US-JennyNeural'),
+          response_format: 'wav', // Use WAV format for better compatibility
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${openaiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          responseType: 'arraybuffer', // Get binary data
+        },
+      );
+
+      // Convert binary audio data to base64
+      const audioBuffer = Buffer.from(ttsResponse.data);
+      const audioBase64 = audioBuffer.toString('base64');
+
+      this.logger.log(
+        `Generated audio from OpenAI TTS, size: ${audioBuffer.length} bytes`,
+      );
+
+      // Send audio through WebSocket to the call
+      const success = this.webSocketService.sendAudioToAcsClient(
+        serverCallId,
+        audioBase64,
+      );
+
+      if (success) {
+        this.logger.log(
+          `Text-to-speech audio sent successfully via WebSocket to call ${serverCallId}`,
+        );
+      } else {
+        this.logger.warn(
+          `Failed to send audio via WebSocket - no active connection for ${serverCallId}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to generate or send text-to-speech to call ${serverCallId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  // Map Azure TTS voice names to OpenAI TTS voices
+  private mapVoiceToOpenAI(azureVoice: string): string {
+    const voiceMap: { [key: string]: string } = {
+      'en-US-JennyNeural': 'alloy',
+      'en-US-GuyNeural': 'echo',
+      'en-US-AriaNeural': 'fable',
+      'en-US-DavisNeural': 'onyx',
+      'en-US-AmberNeural': 'nova',
+      'en-US-AnaNeural': 'shimmer',
+      'en-GB-SoniaNeural': 'alloy',
+      'en-GB-RyanNeural': 'echo',
+      'en-AU-NatashaNeural': 'fable',
+      'en-AU-WilliamNeural': 'onyx',
+      'fr-FR-DeniseNeural': 'nova',
+      'fr-FR-HenriNeural': 'echo',
+      'de-DE-KatjaNeural': 'shimmer',
+      'de-DE-ConradNeural': 'onyx',
+      'es-ES-ElviraNeural': 'nova',
+      'es-ES-AlvaroNeural': 'echo',
+      'it-IT-ElsaNeural': 'alloy',
+      'it-IT-DiegoNeural': 'onyx',
+      'pt-BR-FranciscaNeural': 'fable',
+      'pt-BR-AntonioNeural': 'echo',
+      'ja-JP-NanamiNeural': 'shimmer',
+      'ja-JP-KeitaNeural': 'onyx',
+      'ko-KR-SunHiNeural': 'nova',
+      'ko-KR-InJoonNeural': 'echo',
+      'zh-CN-XiaoxiaoNeural': 'alloy',
+      'zh-CN-YunyangNeural': 'onyx',
+    };
+
+    return voiceMap[azureVoice] || 'alloy'; // Default to 'alloy' if not found
   }
 
   // Convert string to DtmfTone enum
@@ -345,10 +472,10 @@ export class CallAutomationService {
 
   // Update call state
   private updateCallState(
-    callConnectionId: string,
+    serverCallId: string,
     state: CallSession['state'],
   ): void {
-    const callSession = this.activeCalls.get(callConnectionId);
+    const callSession = this.activeCalls.get(serverCallId);
     if (callSession) {
       callSession.state = state;
       if (state === 'disconnected') {
@@ -369,18 +496,18 @@ export class CallAutomationService {
   }
 
   // Hang up a call
-  async hangUpCall(callConnectionId: string): Promise<void> {
-    const callConnection = this.callConnections.get(callConnectionId);
+  async hangUpCall(serverCallId: string): Promise<void> {
+    const callConnection = this.callConnections.get(serverCallId);
     if (!callConnection) {
-      this.logger.warn(`Call connection not found for ${callConnectionId}`);
+      this.logger.warn(`Call connection not found for ${serverCallId}`);
       return;
     }
 
     try {
       await callConnection.hangUp(true); // Terminate for everyone
-      this.logger.log(`Call hung up: ${callConnectionId}`);
+      this.logger.log(`Call hung up: ${serverCallId}`);
     } catch (error) {
-      this.logger.error(`Failed to hang up call ${callConnectionId}:`, error);
+      this.logger.error(`Failed to hang up call ${serverCallId}:`, error);
       throw error;
     }
   }
@@ -391,8 +518,8 @@ export class CallAutomationService {
   }
 
   // Get call session by ID
-  getCallSession(callConnectionId: string): CallSession | undefined {
-    return this.activeCalls.get(callConnectionId);
+  getCallSession(serverCallId: string): CallSession | undefined {
+    return this.activeCalls.get(serverCallId);
   }
 
   // Get call statistics
@@ -419,10 +546,10 @@ export class CallAutomationService {
   }
 
   // Create media streaming configuration
-  private createMediaStreamingConfig(baseUrl: string): any {
+  private createMediaStreamingConfig(baseUrl: string, serverCallId: string): any {
     // Create websocket URL for audio streaming
     const wsUrl = baseUrl.replace(/^https?:/, 'wss:').replace(/^http:/, 'ws:');
-    const audioStreamingUrl = `${wsUrl}/ws`;
+    const audioStreamingUrl = `${wsUrl}/ws?serverCallId=${serverCallId}`;
 
     const config = {
       transportUrl: audioStreamingUrl,

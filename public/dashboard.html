@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Communication Services - Call Automation Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass {
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            background-color: rgba(255, 255, 255, 0.75);
+            border: 1px solid rgba(209, 213, 219, 0.3);
+        }
+        .dark .glass {
+            background-color: rgba(17, 24, 39, 0.75);
+            border: 1px solid rgba(75, 85, 99, 0.3);
+        }
+        .animate-pulse-slow {
+            animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .gradient-text {
+            background: linear-gradient(45deg, #3b82f6, #8b5cf6, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
+    <!-- Header -->
+    <header class="glass border-b sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2">
+                        <i class="fas fa-phone-alt text-primary-600 text-xl"></i>
+                        <h1 class="text-xl font-bold gradient-text">ACS Call Automation Dashboard</h1>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div id="connectionStatus" class="flex items-center space-x-2">
+                            <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                            <span class="text-sm text-gray-600 dark:text-gray-300">Disconnected</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="themeToggle" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                        <i class="fas fa-sun dark:hidden text-yellow-500"></i>
+                        <i class="fas fa-moon hidden dark:block text-blue-400"></i>
+                    </button>
+                    <button id="autoRefresh" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
+                        <i class="fas fa-sync-alt mr-2"></i>
+                        Auto Refresh: ON
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Statistics Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="glass rounded-xl p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Active Calls</p>
+                        <p id="activeCalls" class="text-3xl font-bold text-primary-600">0</p>
+                    </div>
+                    <div class="p-3 bg-green-100 dark:bg-green-900 rounded-full">
+                        <i class="fas fa-phone text-green-600 dark:text-green-400"></i>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    <span id="callsChange" class="text-green-600">+0</span> from last update
+                </p>
+            </div>
+
+            <div class="glass rounded-xl p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">ACS Clients</p>
+                        <p id="acsClients" class="text-3xl font-bold text-blue-600">0</p>
+                    </div>
+                    <div class="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
+                        <i class="fas fa-users text-blue-600 dark:text-blue-400"></i>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Connected clients</p>
+            </div>
+
+            <div class="glass rounded-xl p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Audio Sessions</p>
+                        <p id="audioSessions" class="text-3xl font-bold text-purple-600">0</p>
+                    </div>
+                    <div class="p-3 bg-purple-100 dark:bg-purple-900 rounded-full">
+                        <i class="fas fa-microphone text-purple-600 dark:text-purple-400"></i>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Active streaming</p>
+            </div>
+
+            <div class="glass rounded-xl p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Recordings</p>
+                        <p id="totalRecordings" class="text-3xl font-bold text-orange-600">0</p>
+                    </div>
+                    <div class="p-3 bg-orange-100 dark:bg-orange-900 rounded-full">
+                        <i class="fas fa-file-audio text-orange-600 dark:text-orange-400"></i>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Available files</p>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column -->
+            <div class="lg:col-span-2 space-y-8">
+                <!-- Call Control Panel -->
+                <div class="glass rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                            <i class="fas fa-sliders-h mr-2 text-primary-600"></i>
+                            Call Control Panel
+                        </h2>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Call Connection ID
+                                </label>
+                                <input id="callConnectionId" type="text" 
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    placeholder="Enter call connection ID">
+                            </div>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Text to Speech Message
+                                    </label>
+                                    <textarea id="ttsText" rows="3" 
+                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        placeholder="Enter text to speak...">Hello, this is a test message from Azure Communication Services.</textarea>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Voice
+                                        </label>
+                                        <select id="ttsVoice" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                            <option value="en-US-JennyNeural">Jenny (US English)</option>
+                                            <option value="en-US-GuyNeural">Guy (US English)</option>
+                                            <option value="en-US-AriaNeural">Aria (US English)</option>
+                                            <option value="en-US-DavisNeural">Davis (US English)</option>
+                                            <option value="en-GB-SoniaNeural">Sonia (UK English)</option>
+                                            <option value="en-GB-RyanNeural">Ryan (UK English)</option>
+                                            <option value="fr-FR-DeniseNeural">Denise (French)</option>
+                                            <option value="de-DE-KatjaNeural">Katja (German)</option>
+                                            <option value="es-ES-ElviraNeural">Elvira (Spanish)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Wait Time (ms)
+                                        </label>
+                                        <input id="waitTime" type="number" value="3500" min="100" max="10000"
+                                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-col justify-end space-y-3">
+                            <button id="sendTTS" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="fas fa-volume-up mr-2"></i>
+                                Send Text-to-Speech
+                            </button>
+                            <button id="sendTone" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="fas fa-music mr-2"></i>
+                                Send DTMF Tone (Legacy)
+                            </button>
+                            <button id="hangUpCall" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="fas fa-phone-slash mr-2"></i>
+                                Hang Up Call
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Calls Table -->
+                <div class="glass rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                            <i class="fas fa-list mr-2 text-primary-600"></i>
+                            Active Calls
+                        </h2>
+                        <button id="refreshCalls" class="px-3 py-1 text-sm bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 rounded-lg hover:bg-primary-200 dark:hover:bg-primary-800 transition-colors">
+                            <i class="fas fa-sync-alt mr-1"></i>
+                            Refresh
+                        </button>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-gray-200 dark:border-gray-700">
+                                    <th class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Connection ID</th>
+                                    <th class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">State</th>
+                                    <th class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Duration</th>
+                                    <th class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activeCallsTable" class="divide-y divide-gray-200 dark:divide-gray-700">
+                                <tr>
+                                    <td colspan="4" class="text-center py-8 text-gray-500 dark:text-gray-400">
+                                        <i class="fas fa-phone-slash text-2xl mb-2"></i>
+                                        <p>No active calls</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Audio Recordings -->
+                <div class="glass rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                            <i class="fas fa-music mr-2 text-primary-600"></i>
+                            Audio Recordings
+                        </h2>
+                        <button id="refreshRecordings" class="px-3 py-1 text-sm bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 rounded-lg hover:bg-primary-200 dark:hover:bg-primary-800 transition-colors">
+                            <i class="fas fa-sync-alt mr-1"></i>
+                            Refresh
+                        </button>
+                    </div>
+                    
+                    <div id="recordingsList" class="space-y-3">
+                        <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                            <i class="fas fa-file-audio text-2xl mb-2"></i>
+                            <p>No recordings available</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="space-y-8">
+                <!-- Real-time Events -->
+                <div class="glass rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                            <i class="fas fa-stream mr-2 text-primary-600"></i>
+                            Live Events
+                        </h2>
+                        <div class="flex space-x-2">
+                            <button id="clearEvents" class="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
+                                <i class="fas fa-trash mr-1"></i>
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="eventsContainer" class="h-96 overflow-y-auto space-y-3">
+                        <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                            <i class="fas fa-satellite-dish text-2xl mb-2"></i>
+                            <p>Waiting for events...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Stats Chart -->
+                <div class="glass rounded-xl p-6">
+                    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+                        <i class="fas fa-chart-line mr-2 text-primary-600"></i>
+                        Call Activity
+                    </h2>
+                    <div class="h-64">
+                        <canvas id="activityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Audio Player Modal -->
+    <div id="audioModal" class="fixed inset-0 z-50 hidden bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <div class="glass rounded-xl p-6 max-w-md w-full">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Audio Player</h3>
+                <button id="closeAudioModal" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mb-4">
+                <p id="audioFileName" class="text-sm text-gray-600 dark:text-gray-300 mb-2"></p>
+                <audio id="audioPlayer" controls class="w-full">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">
+                <span id="audioFileSize"></span> • <span id="audioFileDate"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let ws = null;
+        let autoRefreshEnabled = true;
+        let activityChart = null;
+        let previousStats = { activeCalls: 0, acsClients: 0, audioSessions: 0 };
+        const eventHistory = [];
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeTheme();
+            initializeWebSocket();
+            initializeEventListeners();
+            initializeChart();
+            refreshAllData();
+            
+            // Auto refresh every 30 seconds
+            setInterval(() => {
+                if (autoRefreshEnabled) {
+                    refreshAllData();
+                }
+            }, 30000);
+        });
+
+        // Theme handling
+        function initializeTheme() {
+            const theme = localStorage.getItem('theme') || 'light';
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            }
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.contains('dark');
+            if (isDark) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        // WebSocket connection
+        function initializeWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = function() {
+                    updateConnectionStatus(true);
+                    addEvent('system', 'WebSocket Connected', 'Real-time updates enabled', 'success');
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    } catch (error) {
+                        console.error('Error parsing WebSocket message:', error);
+                    }
+                };
+                
+                ws.onclose = function() {
+                    updateConnectionStatus(false);
+                    addEvent('system', 'WebSocket Disconnected', 'Attempting to reconnect...', 'error');
+                    
+                    // Attempt to reconnect after 5 seconds
+                    setTimeout(initializeWebSocket, 5000);
+                };
+                
+                ws.onerror = function(error) {
+                    console.error('WebSocket error:', error);
+                    updateConnectionStatus(false);
+                };
+                
+            } catch (error) {
+                console.error('Failed to initialize WebSocket:', error);
+                updateConnectionStatus(false);
+            }
+        }
+
+        function handleWebSocketMessage(data) {
+            // Handle different message types from WebSocket
+            switch (data.type) {
+                case 'acs_connection_ready':
+                    addEvent('acs', 'ACS Client Connected', data.clientId, 'info');
+                    break;
+                case 'teams-audio-data':
+                    addEvent('audio', 'Audio Data Received', `Teams audio data processed`, 'info');
+                    break;
+                case 'call_event':
+                    addEvent('call', data.eventType || 'Call Event', data.data, 'primary');
+                    break;
+                default:
+                    if (data.message) {
+                        addEvent('system', 'System Message', data.message, 'info');
+                    }
+            }
+            
+            // Refresh stats when we receive events
+            if (autoRefreshEnabled) {
+                refreshStats();
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (connected) {
+                statusEl.innerHTML = `
+                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse-slow"></div>
+                    <span class="text-sm text-gray-600 dark:text-gray-300">Connected</span>
+                `;
+            } else {
+                statusEl.innerHTML = `
+                    <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                    <span class="text-sm text-gray-600 dark:text-gray-300">Disconnected</span>
+                `;
+            }
+        }
+
+        // Event listeners
+        function initializeEventListeners() {
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+            
+            document.getElementById('autoRefresh').addEventListener('click', function() {
+                autoRefreshEnabled = !autoRefreshEnabled;
+                this.innerHTML = autoRefreshEnabled 
+                    ? '<i class="fas fa-sync-alt mr-2"></i>Auto Refresh: ON'
+                    : '<i class="fas fa-sync-alt mr-2"></i>Auto Refresh: OFF';
+                this.className = autoRefreshEnabled 
+                    ? 'px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors'
+                    : 'px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors';
+            });
+            
+            document.getElementById('sendTTS').addEventListener('click', sendTTS);
+            document.getElementById('sendTone').addEventListener('click', sendTone);
+            document.getElementById('hangUpCall').addEventListener('click', hangUpCall);
+            document.getElementById('refreshCalls').addEventListener('click', refreshActiveCalls);
+            document.getElementById('refreshRecordings').addEventListener('click', refreshRecordings);
+            document.getElementById('clearEvents').addEventListener('click', clearEvents);
+            document.getElementById('closeAudioModal').addEventListener('click', closeAudioModal);
+        }
+
+        // Chart initialization
+        function initializeChart() {
+            const ctx = document.getElementById('activityChart').getContext('2d');
+            activityChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Active Calls',
+                        data: [],
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4
+                    }, {
+                        label: 'ACS Clients',
+                        data: [],
+                        borderColor: 'rgb(139, 92, 246)',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart(activeCalls, acsClients) {
+            const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            if (activityChart.data.labels.length >= 10) {
+                activityChart.data.labels.shift();
+                activityChart.data.datasets[0].data.shift();
+                activityChart.data.datasets[1].data.shift();
+            }
+            
+            activityChart.data.labels.push(now);
+            activityChart.data.datasets[0].data.push(activeCalls);
+            activityChart.data.datasets[1].data.push(acsClients);
+            activityChart.update();
+        }
+
+        // Data fetching and updating
+        async function refreshAllData() {
+            try {
+                await Promise.all([
+                    refreshStats(),
+                    refreshActiveCalls(),
+                    refreshRecordings()
+                ]);
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+                addEvent('system', 'Error', 'Failed to refresh dashboard data', 'error');
+            }
+        }
+
+        async function refreshStats() {
+            try {
+                const [callsResponse, acsResponse] = await Promise.all([
+                    fetch('/calls/stats'),
+                    fetch('/acs/stats')
+                ]);
+                
+                const callsData = await callsResponse.json();
+                const acsData = await acsResponse.json();
+                
+                updateStatCards(callsData, acsData);
+            } catch (error) {
+                console.error('Error fetching stats:', error);
+            }
+        }
+
+        function updateStatCards(callsData, acsData) {
+            const activeCalls = callsData.totalActiveCalls || 0;
+            const acsClients = acsData.connectedAcsClients || 0;
+            const audioSessions = acsData.audioSessions?.activeSessions || 0;
+            
+            document.getElementById('activeCalls').textContent = activeCalls;
+            document.getElementById('acsClients').textContent = acsClients;
+            document.getElementById('audioSessions').textContent = audioSessions;
+            
+            // Update change indicators
+            const callsChange = activeCalls - previousStats.activeCalls;
+            const changeEl = document.getElementById('callsChange');
+            if (callsChange > 0) {
+                changeEl.textContent = `+${callsChange}`;
+                changeEl.className = 'text-green-600';
+            } else if (callsChange < 0) {
+                changeEl.textContent = callsChange.toString();
+                changeEl.className = 'text-red-600';
+            } else {
+                changeEl.textContent = '0';
+                changeEl.className = 'text-gray-500';
+            }
+            
+            // Update chart
+            updateChart(activeCalls, acsClients);
+            
+            // Store previous stats
+            previousStats = { activeCalls, acsClients, audioSessions };
+        }
+
+        async function refreshActiveCalls() {
+            try {
+                const response = await fetch('/calls/active');
+                const data = await response.json();
+                const calls = Array.isArray(data) ? data : [];
+                
+                const tableBody = document.getElementById('activeCallsTable');
+                
+                if (calls.length === 0) {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="4" class="text-center py-8 text-gray-500 dark:text-gray-400">
+                                <i class="fas fa-phone-slash text-2xl mb-2"></i>
+                                <p>No active calls</p>
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    tableBody.innerHTML = calls.map(call => {
+                        const duration = Math.round((Date.now() - new Date(call.startTime).getTime()) / 1000);
+                        const durationText = duration > 60 
+                            ? `${Math.floor(duration / 60)}m ${duration % 60}s`
+                            : `${duration}s`;
+                        
+                        const stateColor = {
+                            'incoming': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+                            'answered': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+                            'connected': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+                            'disconnected': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                        }[call.state] || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+                        
+                        return `
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                <td class="py-3 px-4 font-mono text-xs">${call.serverCallId.substring(0, 20)}...</td>
+                                <td class="py-3 px-4">
+                                    <span class="px-2 py-1 rounded-full text-xs font-medium ${stateColor}">
+                                        ${call.state}
+                                    </span>
+                                </td>
+                                <td class="py-3 px-4">${durationText}</td>
+                                <td class="py-3 px-4">
+                                    <button onclick="fillCallId('${call.serverCallId}')" 
+                                        class="text-primary-600 hover:text-primary-800 text-sm">
+                                        <i class="fas fa-edit mr-1"></i>Select
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('Error fetching active calls:', error);
+            }
+        }
+
+        async function refreshRecordings() {
+            try {
+                const response = await fetch('/recordings');
+                const data = await response.json();
+                const recordings = data.recordings || [];
+                
+                document.getElementById('totalRecordings').textContent = recordings.length;
+                
+                const container = document.getElementById('recordingsList');
+                
+                if (recordings.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                            <i class="fas fa-file-audio text-2xl mb-2"></i>
+                            <p>No recordings available</p>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = recordings.map(recording => {
+                        const sizeKB = Math.round(recording.size / 1024);
+                        const date = new Date(recording.created).toLocaleDateString();
+                        
+                        return `
+                            <div class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
+                                <div class="flex items-center space-x-3">
+                                    <div class="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
+                                        <i class="fas fa-file-audio text-orange-600 dark:text-orange-400"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-medium text-gray-900 dark:text-white">${recording.name}</h4>
+                                        <p class="text-sm text-gray-500 dark:text-gray-400">${sizeKB} KB • ${date}</p>
+                                    </div>
+                                </div>
+                                <button onclick="playAudio('${recording.name}', '${recording.path}', ${recording.size}, '${date}')" 
+                                    class="px-3 py-1 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
+                                    <i class="fas fa-play mr-1"></i>
+                                    Play
+                                </button>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('Error fetching recordings:', error);
+            }
+        }
+
+        // Utility functions
+        function fillCallId(callId) {
+            document.getElementById('callConnectionId').value = callId;
+            addEvent('system', 'Call Selected', `Connection ID: ${callId}`, 'info');
+        }
+
+        function playAudio(name, path, size, date) {
+            document.getElementById('audioFileName').textContent = name;
+            document.getElementById('audioFileSize').textContent = `${Math.round(size / 1024)} KB`;
+            document.getElementById('audioFileDate').textContent = date;
+            document.getElementById('audioPlayer').src = path;
+            document.getElementById('audioModal').classList.remove('hidden');
+        }
+
+        function closeAudioModal() {
+            document.getElementById('audioModal').classList.add('hidden');
+            document.getElementById('audioPlayer').pause();
+        }
+
+        async function sendTone() {
+            const callId = document.getElementById('callConnectionId').value.trim();
+            const tone = document.getElementById('dtmfTone').value;
+            const waitTime = parseInt(document.getElementById('waitTime').value);
+            
+            if (!callId) {
+                addEvent('system', 'Error', 'Please enter a call connection ID', 'error');
+                return;
+            }
+            
+            const button = document.getElementById('sendTone');
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sending...';
+            
+            try {
+                const response = await fetch(`/calls/${callId}/tone`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tone, waitTimeMs: waitTime })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addEvent('call', 'DTMF Tone Sent', `Tone "${tone}" sent to ${callId}`, 'success');
+                } else {
+                    addEvent('call', 'Failed to Send Tone', result.message, 'error');
+                }
+            } catch (error) {
+                addEvent('system', 'Error', `Failed to send tone: ${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-music mr-2"></i>Send DTMF Tone';
+            }
+        }
+
+        async function sendTTS() {
+            const callId = document.getElementById('callConnectionId').value.trim();
+            const text = document.getElementById('ttsText').value.trim();
+            const voice = document.getElementById('ttsVoice').value;
+            const waitTime = parseInt(document.getElementById('waitTime').value);
+            
+            if (!callId) {
+                addEvent('system', 'Error', 'Please enter a call connection ID', 'error');
+                return;
+            }
+            
+            if (!text) {
+                addEvent('system', 'Error', 'Please enter text to speak', 'error');
+                return;
+            }
+            
+            const button = document.getElementById('sendTTS');
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sending...';
+            
+            try {
+                const response = await fetch(`/calls/${callId}/tts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, voice, waitTimeMs: waitTime })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addEvent('call', 'Text-to-Speech Sent', `"${text}" sent to ${callId} with voice ${voice}`, 'success');
+                } else {
+                    addEvent('call', 'Failed to Send TTS', result.message, 'error');
+                }
+            } catch (error) {
+                addEvent('system', 'Error', `Failed to send text-to-speech: ${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-volume-up mr-2"></i>Send Text-to-Speech';
+            }
+        }
+
+        async function hangUpCall() {
+            const callId = document.getElementById('callConnectionId').value.trim();
+            
+            if (!callId) {
+                addEvent('system', 'Error', 'Please enter a call connection ID', 'error');
+                return;
+            }
+            
+            const button = document.getElementById('hangUpCall');
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Hanging up...';
+            
+            try {
+                const response = await fetch(`/calls/${callId}/hangup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addEvent('call', 'Call Hung Up', `Call ${callId} terminated`, 'success');
+                    document.getElementById('callConnectionId').value = '';
+                } else {
+                    addEvent('call', 'Failed to Hang Up', result.message, 'error');
+                }
+            } catch (error) {
+                addEvent('system', 'Error', `Failed to hang up call: ${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-phone-slash mr-2"></i>Hang Up Call';
+            }
+        }
+
+        function addEvent(category, title, message, type = 'info') {
+            const container = document.getElementById('eventsContainer');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            // Remove "waiting for events" message if it exists
+            const waitingMsg = container.querySelector('.text-center');
+            if (waitingMsg) {
+                waitingMsg.remove();
+            }
+            
+            const typeStyles = {
+                'success': 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200',
+                'error': 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200',
+                'warning': 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200',
+                'info': 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200',
+                'primary': 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-800 dark:text-primary-200'
+            };
+            
+            const categoryIcons = {
+                'system': 'fas fa-cog',
+                'call': 'fas fa-phone',
+                'acs': 'fas fa-users',
+                'audio': 'fas fa-microphone'
+            };
+            
+            const eventEl = document.createElement('div');
+            eventEl.className = `border-l-4 p-3 rounded-r-lg ${typeStyles[type]} animate-pulse-slow`;
+            eventEl.innerHTML = `
+                <div class="flex items-start space-x-2">
+                    <i class="${categoryIcons[category] || 'fas fa-info-circle'} mt-1"></i>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                            <h4 class="font-medium">${title}</h4>
+                            <span class="text-xs opacity-75">${timestamp}</span>
+                        </div>
+                        <p class="text-sm opacity-90 mt-1">${typeof message === 'object' ? JSON.stringify(message, null, 2) : message}</p>
+                    </div>
+                </div>
+            `;
+            
+            container.insertBefore(eventEl, container.firstChild);
+            
+            // Remove animation after 3 seconds
+            setTimeout(() => {
+                eventEl.classList.remove('animate-pulse-slow');
+            }, 3000);
+            
+            // Keep only last 50 events
+            while (container.children.length > 50) {
+                container.removeChild(container.lastChild);
+            }
+            
+            // Store in history
+            eventHistory.unshift({ category, title, message, type, timestamp });
+            if (eventHistory.length > 100) {
+                eventHistory.pop();
+            }
+        }
+
+        function clearEvents() {
+            const container = document.getElementById('eventsContainer');
+            container.innerHTML = `
+                <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <i class="fas fa-satellite-dish text-2xl mb-2"></i>
+                    <p>Waiting for events...</p>
+                </div>
+            `;
+            eventHistory.length = 0;
+        }
+    </script>
+</body>
+</html>

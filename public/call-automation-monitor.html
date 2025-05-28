@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ACS Call Automation Monitor</title>
+    <title>ACS Call Automation Control Panel</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -22,22 +22,6 @@
         h1, h2, h3 {
             color: #2c3e50;
             margin-top: 0;
-        }
-        .status {
-            padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-            font-weight: bold;
-        }
-        .status.disconnected {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .status.connected {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
         }
         .event {
             margin-bottom: 10px;
@@ -134,12 +118,8 @@
 </head>
 <body>
     <div class="container">
-        <h1>🔥 ACS Call Automation Monitor</h1>
+        <h1>🔥 ACS Call Automation Control Panel</h1>
         
-        <div id="status" class="status disconnected">
-            Disconnected from WebSocket
-        </div>
-
         <div class="test-controls">
             <h3>🧪 Test Controls</h3>
             <p><strong>Note:</strong> These controls work when you have active calls.</p>
@@ -163,16 +143,17 @@
 
         <div class="grid">
             <div class="container">
-                <h3>📞 Call Events</h3>
-                <div class="event-area" id="events"></div>
-                <button onclick="clearEvents()">Clear Events</button>
-            </div>
-
-            <div class="container">
                 <h3>📊 Statistics</h3>
                 <div id="stats" class="stats">Click "Refresh Stats" to load statistics</div>
                 <button onclick="refreshCallStats()">Refresh Call Stats</button>
                 <button onclick="refreshAcsStats()">Refresh ACS Stats</button>
+            </div>
+
+            <div class="container">
+                <h3>📝 Manual Event Log</h3>
+                <div class="event-area" id="events"></div>
+                <button onclick="clearEvents()">Clear Events</button>
+                <button onclick="addTestEvent()">Add Test Event</button>
             </div>
         </div>
 
@@ -182,8 +163,8 @@
                 <li><strong>EventGrid Webhook:</strong> Configure your Azure EventGrid to send events to <code>/acs/events</code></li>
                 <li><strong>Subscription Validation:</strong> The system automatically handles EventGrid subscription validation</li>
                 <li><strong>Incoming Calls:</strong> The system automatically answers calls and sends a 1kHz tone after 2 seconds</li>
-                <li><strong>Monitoring:</strong> All ACS events are displayed here in real-time via WebSocket</li>
                 <li><strong>Testing:</strong> Use the test controls to manually send tones or hang up calls</li>
+                <li><strong>Statistics:</strong> Use the refresh buttons to view current call and ACS statistics</li>
             </ul>
             
             <h4>Supported EventGrid Events:</h4>
@@ -202,19 +183,6 @@
     </div>
 
     <script>
-        let ws = null;
-
-        function updateStatus(connected, message = '') {
-            const statusEl = document.getElementById('status');
-            if (connected) {
-                statusEl.textContent = `Connected to WebSocket${message ? ': ' + message : ''}`;
-                statusEl.className = 'status connected';
-            } else {
-                statusEl.textContent = 'Disconnected from WebSocket';
-                statusEl.className = 'status disconnected';
-            }
-        }
-
         function addEvent(type, title, data, timestamp = new Date()) {
             const eventsEl = document.getElementById('events');
             const eventEl = document.createElement('div');
@@ -232,104 +200,6 @@
             // Keep only last 50 events
             while (eventsEl.children.length > 50) {
                 eventsEl.removeChild(eventsEl.lastChild);
-            }
-        }
-
-        function connectWebSocket() {
-            try {
-                ws = new WebSocket('ws://localhost:3000/ws');
-                
-                ws.onopen = function(event) {
-                    updateStatus(true, 'Monitoring ACS events...');
-                    addEvent('system', '🔌 WebSocket Connected', { message: 'Ready to monitor ACS call events' });
-                };
-
-                ws.onmessage = function(event) {
-                    try {
-                        const data = JSON.parse(event.data);
-                        handleWebSocketMessage(data);
-                    } catch (e) {
-                        addEvent('system', '❌ Message Parse Error', { raw: event.data });
-                    }
-                };
-
-                ws.onclose = function(event) {
-                    updateStatus(false);
-                    addEvent('system', '🔌 WebSocket Disconnected', { 
-                        code: event.code, 
-                        reason: event.reason || 'Connection closed' 
-                    });
-                    
-                    // Auto-reconnect after 3 seconds
-                    setTimeout(connectWebSocket, 3000);
-                };
-
-                ws.onerror = function(error) {
-                    addEvent('system', '❌ WebSocket Error', { error: error.message || 'Unknown error' });
-                };
-
-            } catch (error) {
-                addEvent('system', '❌ Connection Error', { error: error.message });
-                setTimeout(connectWebSocket, 3000);
-            }
-        }
-
-        function handleWebSocketMessage(data) {
-            switch(data.type) {
-                case 'connection':
-                    updateStatus(true, `Client ID: ${data.clientId}`);
-                    break;
-                
-                case 'incoming-call':
-                    addEvent('incoming-call', '📞 Incoming Call', data.data);
-                    // Auto-populate call connection ID for testing
-                    if (data.data.callConnectionId) {
-                        document.getElementById('callConnectionId').value = data.data.callConnectionId;
-                    }
-                    break;
-                
-                case 'call-connected':
-                    addEvent('call-connected', '🟢 Call Connected', data.data);
-                    break;
-                
-                case 'call-disconnected':
-                    addEvent('call-disconnected', '🔴 Call Disconnected', data.data);
-                    break;
-                
-                case 'participants-updated':
-                    addEvent('acs-event', '👥 Participants Updated', data.data);
-                    break;
-                
-                case 'media-streaming-started':
-                    addEvent('acs-event', '🎵 Media Streaming Started', data.data);
-                    break;
-                
-                case 'media-streaming-stopped':
-                    addEvent('acs-event', '🎵 Media Streaming Stopped', data.data);
-                    break;
-                
-                case 'dtmf-received':
-                    addEvent('acs-event', '📲 DTMF Received', data.data);
-                    break;
-                
-                case 'play-completed':
-                    addEvent('acs-event', '🔊 Play Completed', data.data);
-                    break;
-                
-                case 'recording-file-status-updated':
-                    addEvent('acs-event', '📹 Recording Status Updated', data.data);
-                    break;
-                
-                case 'acs-event':
-                    addEvent('acs-event', `🔵 ${data.data.eventType}`, data.data);
-                    break;
-                
-                case 'eventgrid-validation':
-                    addEvent('system', '🔍 EventGrid Subscription Validation', data.data);
-                    break;
-                
-                default:
-                    addEvent('system', `❓ Unknown Event: ${data.type}`, data);
             }
         }
 
@@ -398,6 +268,12 @@
                 return;
             }
             
+            addEvent('system', '🎵 Sending Test Tone...', { 
+                callConnectionId, 
+                frequency, 
+                duration 
+            });
+            
             try {
                 const response = await fetch(`/calls/${callConnectionId}/tone`, {
                     method: 'POST',
@@ -421,6 +297,8 @@
                 return;
             }
             
+            addEvent('system', '📞 Hanging up call...', { callConnectionId });
+            
             try {
                 const response = await fetch(`/calls/${callConnectionId}/hangup`, {
                     method: 'POST',
@@ -439,11 +317,12 @@
             document.getElementById('events').innerHTML = '';
         }
 
-        // Auto-connect on page load
-        connectWebSocket();
-        
-        // Auto-refresh stats every 10 seconds
-        setInterval(refreshCallStats, 10000);
+        function addTestEvent() {
+            addEvent('system', '🧪 Test Event', { 
+                message: 'This is a test event added manually',
+                timestamp: new Date().toISOString()
+            });
+        }
     </script>
 </body>
 </html>

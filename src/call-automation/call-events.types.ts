@@ -1,6 +1,21 @@
 import { CommunicationIdentifier } from '@azure/communication-common';
 export { CommunicationIdentifier };
 
+// Text-to-Speech Configuration
+export interface TextToSpeechConfig {
+  text: string;
+  voice?: string;
+  language?: string;
+  waitTimeMs?: number;
+}
+
+export const DEFAULT_TTS_CONFIG: TextToSpeechConfig = {
+  text: 'Hello, this is a test message from Azure Communication Services.',
+  voice: 'en-US-JennyNeural',
+  language: 'en-US',
+  waitTimeMs: 3500,
+};
+
 export interface EventGridEvent {
   id: string;
   topic: string;
@@ -172,7 +187,7 @@ export interface DtmfToneConfig {
 
 export const DEFAULT_DTMF_CONFIG: DtmfToneConfig = {
   tone: '1',
-  waitTimeMs: 3500,
+  waitTimeMs: 2500,
 };
 
 export interface MediaStreamingConfig {
@@ -194,7 +209,7 @@ export const DEFAULT_MEDIA_STREAMING_CONFIG: MediaStreamingConfig = {
   startMediaStreaming: false,
   enableBidirectional: true,
   audioFormat: 'Pcm24KMono',
-  startDelayMs: 1000,
+  startDelayMs: 500,
 };
 
 export interface AudioStreamingSession {

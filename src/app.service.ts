@@ -36,18 +36,34 @@ export class AppService {
 
   // Send DTMF tone to specific call
   async sendToneToCall(
-    callConnectionId: string,
+    serverCallId: string,
     tone: string = '1',
     waitTimeMs: number = 3500,
   ) {
-    return this.callAutomationService.sendAudioTone(callConnectionId, {
+    return this.callAutomationService.sendAudioTone(serverCallId, {
       tone,
       waitTimeMs,
     });
   }
 
   // Hang up specific call
-  async hangUpCall(callConnectionId: string) {
-    return this.callAutomationService.hangUpCall(callConnectionId);
+  async hangUpCall(serverCallId: string) {
+    return this.callAutomationService.hangUpCall(serverCallId);
+  }
+
+  // Send text-to-speech to specific call
+  async sendTextToSpeechToCall(
+    serverCallId: string,
+    text: string = 'Hello, this is a test message from Azure Communication Services.',
+    voice: string = 'en-US-JennyNeural',
+    language: string = 'en-US',
+    waitTimeMs: number = 3500,
+  ) {
+    return this.callAutomationService.sendTextToSpeech(serverCallId, {
+      text,
+      voice,
+      language,
+      waitTimeMs,
+    });
   }
 }

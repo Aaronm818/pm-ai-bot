@@ -9,6 +9,7 @@ import * as WebSocket from 'ws';
 import { Logger } from '@nestjs/common';
 import { AudioStreamingService } from './audio-streaming.service';
 import { AcsStreamingMessage, OutboundMessage } from './audio-streaming.types';
+import { IncomingMessage } from 'http';
 
 @NestWebSocketGateway({
   path: '/ws',
@@ -22,13 +23,29 @@ export class WebSocketGateway
 
   private logger: Logger = new Logger('AcsAudioStreamingGateway');
   private acsClients: Map<WebSocket, string> = new Map(); // Track ACS audio streaming connections
+  private clientToServerCallId: Map<WebSocket, string> = new Map(); // Map client to server call ID
+  private serverCallIdToClients: Map<string, Set<WebSocket>> = new Map(); // Map server call ID to clients
 
   constructor(private readonly audioStreamingService: AudioStreamingService) {}
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  handleConnection(client: WebSocket, ..._args: any[]) {
+  handleConnection(client: WebSocket, request: IncomingMessage) {
     const clientId = this.generateClientId();
-    this.logger.log(`ACS audio streaming client connected: ${clientId}`);
+    
+    // Extract server call ID from URL path
+    const serverCallId = this.extractServerCallIdFromUrl(request.url);
+    
+    this.logger.log(`ACS audio streaming client connected: ${clientId}${serverCallId ? ` for server call: ${serverCallId}` : ''}`);
+
+    // Store client mappings
+    if (serverCallId) {
+      this.clientToServerCallId.set(client, serverCallId);
+      
+      if (!this.serverCallIdToClients.has(serverCallId)) {
+        this.serverCallIdToClients.set(serverCallId, new Set());
+      }
+      this.serverCallIdToClients.get(serverCallId)!.add(client);
+    }
 
     // Set up raw message handler for ACS audio streaming
     client.on('message', async (data: Buffer) => {
@@ -50,6 +67,7 @@ export class WebSocketGateway
         message:
           'Connected - Ready for Azure Communication Services audio streaming',
         clientId: clientId,
+        serverCallId: serverCallId,
         timestamp: new Date().toISOString(),
       }),
     );
@@ -57,12 +75,26 @@ export class WebSocketGateway
 
   handleDisconnect(client: WebSocket) {
     const clientId = this.acsClients.get(client);
+    const serverCallId = this.clientToServerCallId.get(client);
+    
     if (clientId) {
-      this.logger.log(`ACS client disconnected: ${clientId}`);
+      this.logger.log(`ACS client disconnected: ${clientId}${serverCallId ? ` from server call: ${serverCallId}` : ''}`);
 
       // Clean up audio session
       this.audioStreamingService.endAudioSession(clientId);
       this.acsClients.delete(client);
+
+      // Clean up server call ID mappings
+      if (serverCallId) {
+        this.clientToServerCallId.delete(client);
+        const clients = this.serverCallIdToClients.get(serverCallId);
+        if (clients) {
+          clients.delete(client);
+          if (clients.size === 0) {
+            this.serverCallIdToClients.delete(serverCallId);
+          }
+        }
+      }
 
       this.logger.log(`ACS audio session ended for ${clientId}`);
     }
@@ -109,6 +141,10 @@ export class WebSocketGateway
         await this.handleAudioMetadata(client, message, clientId);
       } else if (message.kind === 'AudioData') {
         await this.handleAudioData(client, message, clientId);
+      } else {
+        this.logger.warn(
+          `Unknown ACS message kind "${message.kind}" from ${clientId}`,
+        );
       }
     } catch (error) {
       this.logger.error(
@@ -217,6 +253,20 @@ export class WebSocketGateway
     return 'acs_client_' + Math.random().toString(36).substr(2, 9);
   }
 
+  private extractServerCallIdFromUrl(url: string | undefined): string | null {
+    if (!url) return null;
+
+    // Try to extract from query string: ?serverCallId=<idHere>
+    const queryMatch = url.match(/[?&]serverCallId=([^&]+)/);
+    if (queryMatch && queryMatch[1]) {
+      return decodeURIComponent(queryMatch[1]);
+    }
+
+    // Fallback: Handle both /ws and /ws/<servercallid> patterns
+    const pathMatch = url.match(/^\/ws(?:\/([^/?]+))?/);
+    return pathMatch && pathMatch[1] ? pathMatch[1] : null;
+  }
+
   // Public methods for service integration
 
   // Broadcast message to all connected clients
@@ -279,16 +329,22 @@ export class WebSocketGateway
   }
 
   // Send audio data to specific ACS client
-  sendAudioToAcsClient(clientId: string, audioData: string): boolean {
-    for (const [client, id] of this.acsClients.entries()) {
-      if (id === clientId && client.readyState === WebSocket.OPEN) {
-        const message =
-          this.audioStreamingService.createOutboundAudioData(audioData);
-        this.sendToAcsClient(client, message);
-        return true;
-      }
+  sendAudioToAcsClient(serverCallId: string, audioData: string): boolean {
+    const clients = this.serverCallIdToClients.get(serverCallId);
+    if (!clients || clients.size === 0) {
+      this.logger.warn(`No clients connected for server call ID: ${serverCallId}`);
+      return false;
     }
-    return false;
+
+    // Send audio data to all connected clients for the server call ID
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        const message = this.audioStreamingService.createOutboundAudioData(audioData);
+        this.sendToAcsClient(client, message);
+      }
+    });
+
+    return true;
   }
 
   // Stop audio for specific ACS client
@@ -306,5 +362,112 @@ export class WebSocketGateway
   // Cleanup method to be called periodically
   performCleanup(): void {
     this.audioStreamingService.cleanupInactiveSessions();
+  }
+
+  // New methods for server call ID management
+
+  // Get all connected clients for a specific server call ID
+  getClientsByServerCallId(serverCallId: string): string[] {
+    const clients = this.serverCallIdToClients.get(serverCallId);
+    if (!clients) return [];
+    
+    const clientIds: string[] = [];
+    for (const client of clients) {
+      const clientId = this.acsClients.get(client);
+      if (clientId) {
+        clientIds.push(clientId);
+      }
+    }
+    return clientIds;
+  }
+
+  // Get server call ID for a specific client
+  getServerCallIdByClient(clientId: string): string | null {
+    for (const [client, id] of this.acsClients.entries()) {
+      if (id === clientId) {
+        return this.clientToServerCallId.get(client) || null;
+      }
+    }
+    return null;
+  }
+
+  // Broadcast message to all clients connected to a specific server call ID
+  broadcastToServerCall(serverCallId: string, eventType: string, data: any): void {
+    const clients = this.serverCallIdToClients.get(serverCallId);
+    if (!clients || clients.size === 0) {
+      this.logger.warn(`No clients connected for server call ID: ${serverCallId}`);
+      return;
+    }
+
+    const message = {
+      type: eventType,
+      data: data,
+      serverCallId: serverCallId,
+      timestamp: new Date().toISOString(),
+    };
+
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(message));
+      }
+    });
+
+    this.logger.debug(
+      `Broadcasted ${eventType} event to ${clients.size} clients for server call ${serverCallId}`,
+    );
+  }
+
+  // Send audio data to all clients connected to a specific server call ID
+  sendAudioToServerCall(serverCallId: string, audioData: string): boolean {
+    const clients = this.serverCallIdToClients.get(serverCallId);
+    if (!clients || clients.size === 0) {
+      return false;
+    }
+
+    let sentCount = 0;
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        const message = this.audioStreamingService.createOutboundAudioData(audioData);
+        this.sendToAcsClient(client, message);
+        sentCount++;
+      }
+    });
+
+    this.logger.debug(`Sent audio data to ${sentCount} clients for server call ${serverCallId}`);
+    return sentCount > 0;
+  }
+
+  // Stop audio for all clients connected to a specific server call ID
+  stopAudioForServerCall(serverCallId: string): boolean {
+    const clients = this.serverCallIdToClients.get(serverCallId);
+    if (!clients || clients.size === 0) {
+      return false;
+    }
+
+    let stoppedCount = 0;
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        const stopMessage = this.audioStreamingService.createStopAudioMessage();
+        this.sendToAcsClient(client, stopMessage);
+        stoppedCount++;
+      }
+    });
+
+    this.logger.debug(`Stopped audio for ${stoppedCount} clients for server call ${serverCallId}`);
+    return stoppedCount > 0;
+  }
+
+  // Get all active server call IDs
+  getActiveServerCallIds(): string[] {
+    return Array.from(this.serverCallIdToClients.keys());
+  }
+
+  // Get statistics for server call connections
+  getServerCallStats(): { [serverCallId: string]: number } {
+    const stats: { [serverCallId: string]: number } = {};
+    for (const [serverCallId, clients] of this.serverCallIdToClients.entries()) {
+      stats[serverCallId] = clients.size;
+    }
+    return stats;
   }
 }
