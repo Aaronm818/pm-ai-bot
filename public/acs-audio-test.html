@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACS Audio Streaming Test Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .message-area {
+            border: 1px solid #ddd;
+            height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        input, button, select, textarea {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        input, textarea {
+            flex: 1;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .acs-button {
+            background-color: #28a745;
+        }
+        .acs-button:hover {
+            background-color: #218838;
+        }
+        .message {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-left: 3px solid #007bff;
+            background-color: white;
+        }
+        .message.sent {
+            border-left-color: #28a745;
+        }
+        .message.received {
+            border-left-color: #ffc107;
+        }
+        .message.acs {
+            border-left-color: #dc3545;
+        }
+        .message.system {
+            border-left-color: #6c757d;
+            font-style: italic;
+        }
+        .stats {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        textarea {
+            min-height: 100px;
+            font-family: monospace;
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ACS Audio Streaming Test Client</h1>
+        
+        <div class="warning">
+            <strong>Note:</strong> This client can simulate both regular WebSocket clients and Azure Communication Services audio streaming clients.
+        </div>
+
+        <div id="status" class="status disconnected">
+            Disconnected
+        </div>
+
+        <div class="input-group">
+            <button id="connectBtn" onclick="connect()">Connect as Regular Client</button>
+            <button id="connectAcsBtn" onclick="connectAsAcs()" class="acs-button">Connect as ACS Client</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+            <select id="clientType" disabled>
+                <option value="regular">Regular Client</option>
+                <option value="acs">ACS Audio Client</option>
+            </select>
+        </div>
+
+        <div class="grid">
+            <div class="container">
+                <h3>Messages</h3>
+                <div class="message-area" id="messages"></div>
+
+                <div class="input-group">
+                    <input type="text" id="messageInput" placeholder="Enter message..." disabled>
+                    <button onclick="sendMessage()" disabled id="sendBtn">Send Message</button>
+                    <button onclick="sendBroadcast()" disabled id="broadcastBtn">Broadcast</button>
+                    <button onclick="ping()" disabled id="pingBtn">Ping</button>
+                </div>
+            </div>
+
+            <div class="container">
+                <h3>ACS Audio Streaming</h3>
+                
+                <div class="input-group">
+                    <button onclick="sendAudioMetadata()" disabled id="audioMetaBtn" class="acs-button">Send Audio Metadata</button>
+                    <button onclick="sendAudioData()" disabled id="audioDataBtn" class="acs-button">Send Audio Data</button>
+                    <button onclick="sendStopAudio()" disabled id="stopAudioBtn" class="acs-button">Stop Audio</button>
+                </div>
+
+                <div style="margin: 10px 0;">
+                    <label>Sample Rate:</label>
+                    <select id="sampleRate">
+                        <option value="16000">16kHz</option>
+                        <option value="24000">24kHz</option>
+                    </select>
+                    
+                    <label style="margin-left: 10px;">Channels:</label>
+                    <select id="channels">
+                        <option value="1">Mono</option>
+                    </select>
+                </div>
+
+                <div style="margin: 10px 0;">
+                    <label>Audio Data (Base64):</label>
+                    <textarea id="audioDataInput" placeholder="Enter base64 encoded PCM audio data or use sample data...">U2FtcGxlIGF1ZGlvIGRhdGEgZm9yIHRlc3Rpbmc=</textarea>
+                </div>
+
+                <div style="margin: 10px 0;">
+                    <label>Participant ID:</label>
+                    <input type="text" id="participantId" value="8:acs:test-participant-id" style="width: 100%;">
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <h3>Statistics</h3>
+            <div id="stats" class="stats">Click "Refresh Stats" to load statistics</div>
+            <button onclick="refreshStats()" style="margin-top: 10px;">Refresh Stats</button>
+        </div>
+
+        <div class="container">
+            <h3>Instructions</h3>
+            <ul>
+                <li><strong>Regular Client:</strong> Standard WebSocket client for messaging</li>
+                <li><strong>ACS Client:</strong> Simulates Azure Communication Services audio streaming</li>
+                <li><strong>Audio Metadata:</strong> Sends stream configuration (first message from ACS)</li>
+                <li><strong>Audio Data:</strong> Sends PCM audio data packets</li>
+                <li><strong>Stop Audio:</strong> Stops audio playback</li>
+            </ul>
+            
+            <h4>ACS Message Formats:</h4>
+            <p><strong>Audio Metadata:</strong></p>
+            <pre>{"kind": "AudioMetadata", "audioMetadata": {...}}</pre>
+            
+            <p><strong>Audio Data:</strong></p>
+            <pre>{"kind": "AudioData", "audioData": {...}}</pre>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let clientId = null;
+        let clientType = 'regular';
+
+        function updateStatus(connected, message = '') {
+            const statusEl = document.getElementById('status');
+            const connectBtn = document.getElementById('connectBtn');
+            const connectAcsBtn = document.getElementById('connectAcsBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const messageInput = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const broadcastBtn = document.getElementById('broadcastBtn');
+            const pingBtn = document.getElementById('pingBtn');
+            const clientTypeSelect = document.getElementById('clientType');
+            
+            // ACS-specific buttons
+            const audioMetaBtn = document.getElementById('audioMetaBtn');
+            const audioDataBtn = document.getElementById('audioDataBtn');
+            const stopAudioBtn = document.getElementById('stopAudioBtn');
+
+            if (connected) {
+                statusEl.textContent = `Connected as ${clientType} client${message ? ': ' + message : ''}`;
+                statusEl.className = 'status connected';
+                connectBtn.disabled = true;
+                connectAcsBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                broadcastBtn.disabled = false;
+                pingBtn.disabled = false;
+                clientTypeSelect.disabled = false;
+                clientTypeSelect.value = clientType;
+                
+                // Enable ACS buttons only for ACS clients
+                const isAcs = clientType === 'acs';
+                audioMetaBtn.disabled = !isAcs;
+                audioDataBtn.disabled = !isAcs;
+                stopAudioBtn.disabled = !isAcs;
+            } else {
+                statusEl.textContent = 'Disconnected';
+                statusEl.className = 'status disconnected';
+                connectBtn.disabled = false;
+                connectAcsBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                messageInput.disabled = true;
+                sendBtn.disabled = true;
+                broadcastBtn.disabled = true;
+                pingBtn.disabled = true;
+                clientTypeSelect.disabled = true;
+                audioMetaBtn.disabled = true;
+                audioDataBtn.disabled = true;
+                stopAudioBtn.disabled = true;
+            }
+        }
+
+        function addMessage(content, type = 'received') {
+            const messagesEl = document.getElementById('messages');
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            messageEl.innerHTML = `<strong>[${timestamp}]</strong> ${content}`;
+            
+            messagesEl.appendChild(messageEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function connect() {
+            clientType = 'regular';
+            connectWebSocket();
+        }
+
+        function connectAsAcs() {
+            clientType = 'acs';
+            connectWebSocket();
+        }
+
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket('ws://localhost:3000/ws');
+                
+                ws.onopen = function(event) {
+                    updateStatus(true, 'Waiting for client ID...');
+                    addMessage(`WebSocket connection opened as ${clientType} client`, 'system');
+                };
+
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleMessage(data);
+                    } catch (e) {
+                        addMessage(`Raw message: ${event.data}`, 'received');
+                    }
+                };
+
+                ws.onclose = function(event) {
+                    updateStatus(false);
+                    addMessage(`Connection closed. Code: ${event.code}, Reason: ${event.reason}`, 'system');
+                    clientId = null;
+                };
+
+                ws.onerror = function(error) {
+                    addMessage(`WebSocket error: ${error.message || 'Unknown error'}`, 'system');
+                };
+
+            } catch (error) {
+                addMessage(`Connection error: ${error.message}`, 'system');
+            }
+        }
+
+        function handleMessage(data) {
+            switch(data.type) {
+                case 'connection':
+                    clientId = data.clientId;
+                    updateStatus(true, `Client ID: ${clientId}`);
+                    addMessage(`Connected with client ID: ${clientId}`, 'system');
+                    break;
+                
+                case 'message_received':
+                    addMessage(`Message confirmed: ${JSON.stringify(data.originalMessage)}`, 'sent');
+                    break;
+                
+                case 'message':
+                    addMessage(`Message from ${data.fromClientId}: ${JSON.stringify(data.data)}`, 'received');
+                    break;
+                
+                case 'broadcast':
+                    addMessage(`Broadcast from ${data.fromClientId}: ${JSON.stringify(data.data)}`, 'received');
+                    break;
+                
+                case 'user_joined':
+                    addMessage(`User joined: ${data.clientId}`, 'system');
+                    break;
+                
+                case 'user_left':
+                    addMessage(`User left: ${data.clientId}`, 'system');
+                    break;
+                
+                case 'audio_session_started':
+                    addMessage(`Audio session started: ${data.clientId} (${data.audioMetadata.sampleRate}Hz, ${data.audioMetadata.encoding})`, 'acs');
+                    break;
+                
+                case 'audio_session_ended':
+                    addMessage(`Audio session ended: ${data.clientId}`, 'acs');
+                    break;
+                
+                case 'audio_activity':
+                    addMessage(`Audio activity from ${data.clientId}: ${data.participantId} (silent: ${data.silent})`, 'acs');
+                    break;
+                
+                case 'pong':
+                    addMessage('Pong received', 'system');
+                    break;
+                
+                case 'notification':
+                    addMessage(`Notification: ${data.title} - ${data.message}`, 'system');
+                    break;
+                
+                default:
+                    addMessage(`Unknown message: ${JSON.stringify(data)}`, 'received');
+            }
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (message && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    event: 'message',
+                    data: message
+                }));
+                input.value = '';
+            }
+        }
+
+        function sendBroadcast() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (message && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    event: 'broadcast',
+                    data: message
+                }));
+                input.value = '';
+            }
+        }
+
+        function ping() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    event: 'ping',
+                    data: {}
+                }));
+            }
+        }
+
+        function sendAudioMetadata() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const sampleRate = parseInt(document.getElementById('sampleRate').value);
+                const channels = parseInt(document.getElementById('channels').value);
+                
+                const message = {
+                    kind: "AudioMetadata",
+                    audioMetadata: {
+                        subscriptionId: generateSubscriptionId(),
+                        encoding: "PCM",
+                        sampleRate: sampleRate,
+                        channels: channels,
+                        length: 640
+                    }
+                };
+                
+                ws.send(JSON.stringify(message));
+                addMessage(`Sent Audio Metadata: ${sampleRate}Hz, ${channels} channel(s)`, 'sent');
+            }
+        }
+
+        function sendAudioData() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const audioData = document.getElementById('audioDataInput').value.trim();
+                const participantId = document.getElementById('participantId').value.trim();
+                
+                if (!audioData) {
+                    alert('Please enter audio data (base64 encoded)');
+                    return;
+                }
+                
+                const message = {
+                    kind: "AudioData",
+                    audioData: {
+                        timestamp: new Date().toISOString(),
+                        participantRawID: participantId,
+                        data: audioData,
+                        silent: false
+                    }
+                };
+                
+                ws.send(JSON.stringify(message));
+                addMessage(`Sent Audio Data: ${audioData.length} chars from ${participantId}`, 'sent');
+            }
+        }
+
+        function sendStopAudio() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    event: 'stop_audio',
+                    data: {}
+                }));
+                addMessage('Sent Stop Audio request', 'sent');
+            }
+        }
+
+        function generateSubscriptionId() {
+            return 'test-subscription-' + Math.random().toString(36).substr(2, 9);
+        }
+
+        async function refreshStats() {
+            try {
+                const response = await fetch('/websocket/stats');
+                const stats = await response.json();
+                
+                document.getElementById('stats').innerHTML = `
+                    <strong>WebSocket Statistics:</strong><br>
+                    Total Clients: ${stats.totalClients}<br>
+                    ACS Clients: ${stats.acsClients}<br>
+                    Regular Clients: ${stats.regularClients}<br>
+                    Connected Client IDs: ${stats.connectedClientIds.join(', ')}<br><br>
+                    
+                    <strong>Audio Sessions:</strong><br>
+                    Total Sessions: ${stats.audioSessions.totalSessions}<br>
+                    Active Sessions: ${stats.audioSessions.activeSessions}<br>
+                    
+                    ${stats.audioSessions.sessions.length > 0 ? 
+                        '<br><strong>Active Audio Sessions:</strong><br>' + 
+                        stats.audioSessions.sessions.map(s => 
+                            `${s.sessionId}: ${s.participantId || 'Unknown'} (${s.sampleRate}Hz, ${s.encoding})`
+                        ).join('<br>')
+                        : ''
+                    }
+                `;
+            } catch (error) {
+                document.getElementById('stats').textContent = 'Error loading statistics: ' + error.message;
+            }
+        }
+
+        // Allow sending message with Enter key
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Load initial stats
+        refreshStats();
+    </script>
+</body>
+</html>

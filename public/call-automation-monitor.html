@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACS Call Automation Monitor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .event {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-left: 4px solid #007bff;
+            background-color: #f8f9fa;
+            border-radius: 0 4px 4px 0;
+        }
+        .event.incoming-call {
+            border-left-color: #28a745;
+            background-color: #d4edda;
+        }
+        .event.call-connected {
+            border-left-color: #17a2b8;
+            background-color: #d1ecf1;
+        }
+        .event.call-disconnected {
+            border-left-color: #dc3545;
+            background-color: #f8d7da;
+        }
+        .event.acs-event {
+            border-left-color: #ffc107;
+            background-color: #fff3cd;
+        }
+        .event-header {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .event-time {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        .event-data {
+            font-family: monospace;
+            font-size: 0.9em;
+            background-color: #f1f3f4;
+            padding: 8px;
+            border-radius: 4px;
+            margin-top: 8px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .stats {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .event-area {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            background-color: #ffffff;
+        }
+        .test-controls {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        input[type="text"], input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 ACS Call Automation Monitor</h1>
+        
+        <div id="status" class="status disconnected">
+            Disconnected from WebSocket
+        </div>
+
+        <div class="test-controls">
+            <h3>🧪 Test Controls</h3>
+            <p><strong>Note:</strong> These controls work when you have active calls.</p>
+            
+            <div>
+                <label>Call Connection ID:</label>
+                <input type="text" id="callConnectionId" placeholder="Call connection ID" style="width: 300px;">
+            </div>
+            
+            <div>
+                <label>Tone Frequency (Hz):</label>
+                <input type="number" id="toneFrequency" value="1000" min="100" max="8000">
+                
+                <label>Duration (ms):</label>
+                <input type="number" id="toneDuration" value="2000" min="100" max="10000">
+                
+                <button onclick="sendTestTone()">🎵 Send Tone</button>
+                <button onclick="hangUpCall()">📞 Hang Up</button>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="container">
+                <h3>📞 Call Events</h3>
+                <div class="event-area" id="events"></div>
+                <button onclick="clearEvents()">Clear Events</button>
+            </div>
+
+            <div class="container">
+                <h3>📊 Statistics</h3>
+                <div id="stats" class="stats">Click "Refresh Stats" to load statistics</div>
+                <button onclick="refreshCallStats()">Refresh Call Stats</button>
+                <button onclick="refreshAcsStats()">Refresh ACS Stats</button>
+            </div>
+        </div>
+
+        <div class="container">
+            <h3>ℹ️ Instructions</h3>
+            <ul>
+                <li><strong>EventGrid Webhook:</strong> Configure your Azure EventGrid to send events to <code>/acs/events</code></li>
+                <li><strong>Subscription Validation:</strong> The system automatically handles EventGrid subscription validation</li>
+                <li><strong>Incoming Calls:</strong> The system automatically answers calls and sends a 1kHz tone after 2 seconds</li>
+                <li><strong>Monitoring:</strong> All ACS events are displayed here in real-time via WebSocket</li>
+                <li><strong>Testing:</strong> Use the test controls to manually send tones or hang up calls</li>
+            </ul>
+            
+            <h4>Supported EventGrid Events:</h4>
+            <ul>
+                <li>🔍 EventGrid Subscription Validation (automatic)</li>
+                <li>📞 Incoming Call</li>
+                <li>🟢 Call Connected</li>
+                <li>🔴 Call Disconnected</li>
+                <li>👥 Participants Updated</li>
+                <li>🎵 Media Streaming Started/Stopped</li>
+                <li>📲 DTMF Received</li>
+                <li>🔊 Play Completed</li>
+                <li>📹 Recording File Status Updated</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+
+        function updateStatus(connected, message = '') {
+            const statusEl = document.getElementById('status');
+            if (connected) {
+                statusEl.textContent = `Connected to WebSocket${message ? ': ' + message : ''}`;
+                statusEl.className = 'status connected';
+            } else {
+                statusEl.textContent = 'Disconnected from WebSocket';
+                statusEl.className = 'status disconnected';
+            }
+        }
+
+        function addEvent(type, title, data, timestamp = new Date()) {
+            const eventsEl = document.getElementById('events');
+            const eventEl = document.createElement('div');
+            eventEl.className = `event ${type}`;
+            
+            const timeStr = timestamp.toLocaleTimeString();
+            eventEl.innerHTML = `
+                <div class="event-header">${title}</div>
+                <div class="event-time">${timeStr}</div>
+                <div class="event-data">${JSON.stringify(data, null, 2)}</div>
+            `;
+            
+            eventsEl.insertBefore(eventEl, eventsEl.firstChild);
+            
+            // Keep only last 50 events
+            while (eventsEl.children.length > 50) {
+                eventsEl.removeChild(eventsEl.lastChild);
+            }
+        }
+
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket('ws://localhost:3000/ws');
+                
+                ws.onopen = function(event) {
+                    updateStatus(true, 'Monitoring ACS events...');
+                    addEvent('system', '🔌 WebSocket Connected', { message: 'Ready to monitor ACS call events' });
+                };
+
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    } catch (e) {
+                        addEvent('system', '❌ Message Parse Error', { raw: event.data });
+                    }
+                };
+
+                ws.onclose = function(event) {
+                    updateStatus(false);
+                    addEvent('system', '🔌 WebSocket Disconnected', { 
+                        code: event.code, 
+                        reason: event.reason || 'Connection closed' 
+                    });
+                    
+                    // Auto-reconnect after 3 seconds
+                    setTimeout(connectWebSocket, 3000);
+                };
+
+                ws.onerror = function(error) {
+                    addEvent('system', '❌ WebSocket Error', { error: error.message || 'Unknown error' });
+                };
+
+            } catch (error) {
+                addEvent('system', '❌ Connection Error', { error: error.message });
+                setTimeout(connectWebSocket, 3000);
+            }
+        }
+
+        function handleWebSocketMessage(data) {
+            switch(data.type) {
+                case 'connection':
+                    updateStatus(true, `Client ID: ${data.clientId}`);
+                    break;
+                
+                case 'incoming-call':
+                    addEvent('incoming-call', '📞 Incoming Call', data.data);
+                    // Auto-populate call connection ID for testing
+                    if (data.data.callConnectionId) {
+                        document.getElementById('callConnectionId').value = data.data.callConnectionId;
+                    }
+                    break;
+                
+                case 'call-connected':
+                    addEvent('call-connected', '🟢 Call Connected', data.data);
+                    break;
+                
+                case 'call-disconnected':
+                    addEvent('call-disconnected', '🔴 Call Disconnected', data.data);
+                    break;
+                
+                case 'participants-updated':
+                    addEvent('acs-event', '👥 Participants Updated', data.data);
+                    break;
+                
+                case 'media-streaming-started':
+                    addEvent('acs-event', '🎵 Media Streaming Started', data.data);
+                    break;
+                
+                case 'media-streaming-stopped':
+                    addEvent('acs-event', '🎵 Media Streaming Stopped', data.data);
+                    break;
+                
+                case 'dtmf-received':
+                    addEvent('acs-event', '📲 DTMF Received', data.data);
+                    break;
+                
+                case 'play-completed':
+                    addEvent('acs-event', '🔊 Play Completed', data.data);
+                    break;
+                
+                case 'recording-file-status-updated':
+                    addEvent('acs-event', '📹 Recording Status Updated', data.data);
+                    break;
+                
+                case 'acs-event':
+                    addEvent('acs-event', `🔵 ${data.data.eventType}`, data.data);
+                    break;
+                
+                case 'eventgrid-validation':
+                    addEvent('system', '🔍 EventGrid Subscription Validation', data.data);
+                    break;
+                
+                default:
+                    addEvent('system', `❓ Unknown Event: ${data.type}`, data);
+            }
+        }
+
+        async function refreshCallStats() {
+            try {
+                const response = await fetch('/calls/stats');
+                const stats = await response.json();
+                
+                document.getElementById('stats').innerHTML = `
+                    <strong>Call Statistics:</strong><br>
+                    Total Active Calls: ${stats.totalActiveCalls}<br><br>
+                    
+                    <strong>Calls by State:</strong><br>
+                    Incoming: ${stats.callsByState.incoming}<br>
+                    Answered: ${stats.callsByState.answered}<br>
+                    Connected: ${stats.callsByState.connected}<br>
+                    Disconnected: ${stats.callsByState.disconnected}<br><br>
+                    
+                    ${stats.activeCalls.length > 0 ? 
+                        '<strong>Active Calls:</strong><br>' + 
+                        stats.activeCalls.map(call => 
+                            `${call.callConnectionId}: ${call.state} (${Math.round(call.duration / 1000)}s)`
+                        ).join('<br>')
+                        : '<em>No active calls</em>'
+                    }
+                `;
+            } catch (error) {
+                addEvent('system', '❌ Failed to refresh call stats', { error: error.message });
+            }
+        }
+
+        async function refreshAcsStats() {
+            try {
+                const response = await fetch('/acs/stats');
+                const stats = await response.json();
+                
+                document.getElementById('stats').innerHTML = `
+                    <strong>ACS WebSocket Statistics:</strong><br>
+                    Connected ACS Clients: ${stats.connectedAcsClients}<br>
+                    Client IDs: ${stats.connectedClientIds.join(', ') || 'None'}<br><br>
+                    
+                    <strong>Audio Sessions:</strong><br>
+                    Total Sessions: ${stats.audioSessions.totalSessions}<br>
+                    Active Sessions: ${stats.audioSessions.activeSessions}<br>
+                    
+                    ${stats.audioSessions.sessions.length > 0 ? 
+                        '<br><strong>Active Audio Sessions:</strong><br>' + 
+                        stats.audioSessions.sessions.map(s => 
+                            `${s.sessionId}: ${s.participantId || 'Unknown'}`
+                        ).join('<br>')
+                        : ''
+                    }
+                `;
+            } catch (error) {
+                addEvent('system', '❌ Failed to refresh ACS stats', { error: error.message });
+            }
+        }
+
+        async function sendTestTone() {
+            const callConnectionId = document.getElementById('callConnectionId').value.trim();
+            const frequency = parseInt(document.getElementById('toneFrequency').value);
+            const duration = parseInt(document.getElementById('toneDuration').value);
+            
+            if (!callConnectionId) {
+                alert('Please enter a call connection ID');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/calls/${callConnectionId}/tone`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ frequency, duration })
+                });
+                
+                const result = await response.json();
+                addEvent('system', '🎵 Test Tone Result', result);
+                
+            } catch (error) {
+                addEvent('system', '❌ Failed to send test tone', { error: error.message });
+            }
+        }
+
+        async function hangUpCall() {
+            const callConnectionId = document.getElementById('callConnectionId').value.trim();
+            
+            if (!callConnectionId) {
+                alert('Please enter a call connection ID');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/calls/${callConnectionId}/hangup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await response.json();
+                addEvent('system', '📞 Hang Up Result', result);
+                
+            } catch (error) {
+                addEvent('system', '❌ Failed to hang up call', { error: error.message });
+            }
+        }
+
+        function clearEvents() {
+            document.getElementById('events').innerHTML = '';
+        }
+
+        // Auto-connect on page load
+        connectWebSocket();
+        
+        // Auto-refresh stats every 10 seconds
+        setInterval(refreshCallStats, 10000);
+    </script>
+</body>
+</html>

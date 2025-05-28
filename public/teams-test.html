@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teams Meeting Join Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="url"], select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #0078d4;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #106ebe;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .call-item {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        .call-status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .call-status.connecting { background-color: #fff3cd; color: #856404; }
+        .call-status.connected { background-color: #d4edda; color: #155724; }
+        .call-status.disconnected { background-color: #f8d7da; color: #721c24; }
+        .call-status.failed { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Teams Meeting Join Test</h1>
+        
+        <div id="status" class="status info" style="display: none;">
+            Ready to join Teams meetings
+        </div>
+
+        <div class="form-group">
+            <label for="joinMethod">Join Method:</label>
+            <select id="joinMethod" onchange="toggleJoinFields()">
+                <option value="link">Meeting Link</option>
+                <option value="id">Meeting ID & Passcode</option>
+                <option value="coordinates">Meeting Coordinates</option>
+            </select>
+        </div>
+
+        <!-- Meeting Link -->
+        <div id="linkFields">
+            <div class="form-group">
+                <label for="meetingLink">Teams Meeting Link:</label>
+                <input type="url" id="meetingLink" placeholder="https://teams.microsoft.com/l/meetup-join/...">
+            </div>
+        </div>
+
+        <!-- Meeting ID & Passcode -->
+        <div id="idFields" style="display: none;">
+            <div class="form-group">
+                <label for="meetingId">Meeting ID:</label>
+                <input type="text" id="meetingId" placeholder="123 456 789 012">
+            </div>
+            <div class="form-group">
+                <label for="passcode">Passcode:</label>
+                <input type="text" id="passcode" placeholder="aBcDeF">
+            </div>
+        </div>
+
+        <!-- Meeting Coordinates -->
+        <div id="coordinatesFields" style="display: none;">
+            <div class="form-group">
+                <label for="threadId">Thread ID:</label>
+                <input type="text" id="threadId" placeholder="Thread ID from Microsoft Graph">
+            </div>
+            <div class="form-group">
+                <label for="organizerId">Organizer ID:</label>
+                <input type="text" id="organizerId" placeholder="Organizer GUID">
+            </div>
+            <div class="form-group">
+                <label for="tenantId">Tenant ID:</label>
+                <input type="text" id="tenantId" placeholder="Tenant GUID">
+            </div>
+            <div class="form-group">
+                <label for="messageId">Message ID:</label>
+                <input type="text" id="messageId" placeholder="Message ID">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="displayName">Display Name (optional):</label>
+            <input type="text" id="displayName" placeholder="ACS Recording Bot" value="ACS Recording Bot">
+        </div>
+
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="muteOnJoin" checked> Mute on Join
+            </label>
+        </div>
+
+        <button onclick="joinMeeting()" id="joinBtn">Join Meeting</button>
+        <button onclick="refreshStats()" id="refreshBtn">Refresh Stats</button>
+        <button onclick="clearLog()" id="clearBtn">Clear Log</button>
+    </div>
+
+    <div class="container">
+        <h3>Active Calls</h3>
+        <div id="activeCalls">No active calls</div>
+    </div>
+
+    <div class="container">
+        <h3>Activity Log</h3>
+        <div id="log" class="log">Ready to join Teams meetings...</div>
+    </div>
+
+    <script>
+        function toggleJoinFields() {
+            const method = document.getElementById('joinMethod').value;
+            
+            document.getElementById('linkFields').style.display = method === 'link' ? 'block' : 'none';
+            document.getElementById('idFields').style.display = method === 'id' ? 'block' : 'none';
+            document.getElementById('coordinatesFields').style.display = method === 'coordinates' ? 'block' : 'none';
+        }
+
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            statusEl.style.display = 'block';
+            
+            if (type !== 'error') {
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        function addLog(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}`;
+            
+            logEl.innerHTML += logEntry + '\\n';
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        async function joinMeeting() {
+            const joinBtn = document.getElementById('joinBtn');
+            joinBtn.disabled = true;
+            
+            try {
+                const method = document.getElementById('joinMethod').value;
+                let locator = {};
+
+                // Build locator based on join method
+                if (method === 'link') {
+                    const meetingLink = document.getElementById('meetingLink').value.trim();
+                    if (!meetingLink) {
+                        throw new Error('Meeting link is required');
+                    }
+                    locator.meetingLink = meetingLink;
+                } else if (method === 'id') {
+                    const meetingId = document.getElementById('meetingId').value.trim();
+                    const passcode = document.getElementById('passcode').value.trim();
+                    if (!meetingId || !passcode) {
+                        throw new Error('Meeting ID and passcode are required');
+                    }
+                    locator.meetingId = meetingId;
+                    locator.passcode = passcode;
+                } else if (method === 'coordinates') {
+                    const threadId = document.getElementById('threadId').value.trim();
+                    const organizerId = document.getElementById('organizerId').value.trim();
+                    const tenantId = document.getElementById('tenantId').value.trim();
+                    const messageId = document.getElementById('messageId').value.trim();
+                    if (!threadId || !organizerId || !tenantId || !messageId) {
+                        throw new Error('All coordinate fields are required');
+                    }
+                    locator.threadId = threadId;
+                    locator.organizerId = organizerId;
+                    locator.tenantId = tenantId;
+                    locator.messageId = messageId;
+                }
+
+                const request = {
+                    locator: locator,
+                    displayName: document.getElementById('displayName').value.trim() || 'ACS Recording Bot',
+                    muteOnJoin: document.getElementById('muteOnJoin').checked
+                };
+
+                addLog(`Attempting to join Teams meeting using ${method}...`);
+                showStatus('Joining Teams meeting...', 'info');
+
+                const response = await fetch('/teams/join', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(request)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    addLog(`Successfully initiated join with call ID: ${result.callId}`);
+                    showStatus(`Successfully initiated join with call ID: ${result.callId}`, 'success');
+                    refreshStats();
+                } else {
+                    throw new Error(result.message || 'Unknown error');
+                }
+
+            } catch (error) {
+                addLog(`Error joining meeting: ${error.message}`, 'error');
+                showStatus(`Error: ${error.message}`, 'error');
+            } finally {
+                joinBtn.disabled = false;
+            }
+        }
+
+        async function leaveCall(callId) {
+            try {
+                addLog(`Leaving call: ${callId}`);
+                
+                const response = await fetch(`/teams/leave/${callId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    addLog(`Successfully left call: ${callId}`);
+                    showStatus('Successfully left call', 'success');
+                    refreshStats();
+                } else {
+                    throw new Error(result.message || 'Unknown error');
+                }
+
+            } catch (error) {
+                addLog(`Error leaving call: ${error.message}`, 'error');
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function refreshStats() {
+            try {
+                const response = await fetch('/teams/stats');
+                const result = await response.json();
+
+                if (result.success) {
+                    updateActiveCalls(result.stats.teams.calls);
+                    addLog(`Stats refreshed - Active calls: ${result.stats.teams.activeCalls}, Total: ${result.stats.teams.totalCalls}`);
+                } else {
+                    throw new Error(result.message || 'Failed to fetch stats');
+                }
+
+            } catch (error) {
+                addLog(`Error refreshing stats: ${error.message}`, 'error');
+            }
+        }
+
+        function updateActiveCalls(calls) {
+            const activeCallsEl = document.getElementById('activeCalls');
+            
+            if (!calls || calls.length === 0) {
+                activeCallsEl.innerHTML = 'No active calls';
+                return;
+            }
+
+            const callsHtml = calls.map(call => `
+                <div class="call-item">
+                    <div>
+                        <strong>Call ID:</strong> ${call.callId}
+                        <span class="call-status ${call.state}">${call.state.toUpperCase()}</span>
+                    </div>
+                    <div><strong>Start Time:</strong> ${call.startTime ? new Date(call.startTime).toLocaleString() : 'N/A'}</div>
+                    <div><strong>Participants:</strong> ${call.participantCount || 0}</div>
+                    ${call.state === 'connected' || call.state === 'connecting' ? 
+                        `<button onclick="leaveCall('${call.callId}')" style="margin-top: 10px;">Leave Call</button>` : 
+                        ''
+                    }
+                </div>
+            `).join('');
+
+            activeCallsEl.innerHTML = callsHtml;
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            toggleJoinFields();
+            refreshStats();
+            
+            // Auto-refresh stats every 30 seconds
+            setInterval(refreshStats, 30000);
+        });
+    </script>
+</body>
+</html>
