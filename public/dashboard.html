@@ -202,10 +202,6 @@
                                 <i class="fas fa-volume-up mr-2"></i>
                                 Send Text-to-Speech
                             </button>
-                            <button id="sendTone" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                <i class="fas fa-music mr-2"></i>
-                                Send DTMF Tone (Legacy)
-                            </button>
                             <button id="hangUpCall" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                 <i class="fas fa-phone-slash mr-2"></i>
                                 Hang Up Call
@@ -712,42 +708,6 @@
         function closeAudioModal() {
             document.getElementById('audioModal').classList.add('hidden');
             document.getElementById('audioPlayer').pause();
-        }
-
-        async function sendTone() {
-            const callId = document.getElementById('callConnectionId').value.trim();
-            const tone = document.getElementById('dtmfTone').value;
-            const waitTime = parseInt(document.getElementById('waitTime').value);
-            
-            if (!callId) {
-                addEvent('system', 'Error', 'Please enter a call connection ID', 'error');
-                return;
-            }
-            
-            const button = document.getElementById('sendTone');
-            button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sending...';
-            
-            try {
-                const response = await fetch(`/calls/${callId}/tone`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tone, waitTimeMs: waitTime })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    addEvent('call', 'DTMF Tone Sent', `Tone "${tone}" sent to ${callId}`, 'success');
-                } else {
-                    addEvent('call', 'Failed to Send Tone', result.message, 'error');
-                }
-            } catch (error) {
-                addEvent('system', 'Error', `Failed to send tone: ${error.message}`, 'error');
-            } finally {
-                button.disabled = false;
-                button.innerHTML = '<i class="fas fa-music mr-2"></i>Send DTMF Tone';
-            }
         }
 
         async function sendTTS() {
