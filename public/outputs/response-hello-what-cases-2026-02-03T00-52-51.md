@@ -1,0 +1,1 @@
+You have 4 active cases. The most urgent are a customer portal login issue and a billing discrepancy where someone was charged twice. You also have a password reset email problem and a feature request for PDF export functionality.

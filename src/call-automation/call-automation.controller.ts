@@ -6,9 +6,11 @@ import {
   BadRequestException,
   HttpCode,
   Param,
+  Get,
 } from '@nestjs/common';
 import { CallAutomationService } from './call-automation.service';
 import { WebSocketService } from '../websocket/websocket.service';
+import { CommunicationIdentityClient } from '@azure/communication-identity';
 import {
   EventGridEvent,
   ACS_EVENT_TYPES,
@@ -29,11 +31,45 @@ import {
 @Controller('acs')
 export class CallAutomationController {
   private readonly logger = new Logger(CallAutomationController.name);
+  private readonly identityClient: CommunicationIdentityClient;
 
   constructor(
     private readonly callAutomationService: CallAutomationService,
     private readonly webSocketService: WebSocketService,
-  ) {}
+  ) {
+    // Initialize identity client for generating tokens
+    const connectionString = process.env.ACS_CONNECTION_STRING;
+    if (!connectionString) {
+      this.logger.error('ACS_CONNECTION_STRING not set - token endpoint will fail');
+    }
+    this.identityClient = new CommunicationIdentityClient(connectionString || '');
+  }
+
+  /**
+   * Generate ACS token for browser clients to join Teams meetings
+   * GET /acs/token
+   */
+  @Get('token')
+  async getToken() {
+    this.logger.log('Generating ACS token for browser client');
+    
+    try {
+      // Create a new user and get token with VOIP scope
+      const user = await this.identityClient.createUser();
+      const tokenResponse = await this.identityClient.getToken(user, ['voip']);
+      
+      this.logger.log(`Token generated for user: ${user.communicationUserId}`);
+      
+      return {
+        token: tokenResponse.token,
+        expiresOn: tokenResponse.expiresOn,
+        userId: user.communicationUserId,
+      };
+    } catch (error) {
+      this.logger.error('Failed to generate ACS token:', error);
+      throw new BadRequestException('Failed to generate token');
+    }
+  }
 
   @Post('events')
   @HttpCode(200)

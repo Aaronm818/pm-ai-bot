@@ -1,0 +1,27 @@
+# Case Summary Report
+
+## Overview
+Summary of current active cases requiring PM attention and resolution
+
+## Key Points
+- **4 Active Cases** across support, billing, and feature requests
+- **3 Critical/High Priority Issues**: Login portal, billing, authentication
+- **1 Low Priority Enhancement**: PDF export feature request
+- **Mixed Severity Levels**: 3 blocking user access, 1 nice-to-have
+
+## Current Status
+
+| Case | Issue | Priority | Status |
+|------|-------|----------|--------|
+| Login Issues | Customer portal down | 🔴 Critical | Active |
+| Billing Discrepancy | Double charge (Invoice #4521) | 🔴 Critical | Active |
+| Password Reset | Reset emails not arriving | 🔴 High | Active |
+| PDF Export | Feature enhancement | 🟡 Low | Active |
+
+## Notable Items Requiring Attention
+- ⚠️ **Portal Access Down** - Impacting customer ability to access accounts
+- ⚠️ **Billing Issue** - Customer impact with financial implications
+- ⚠️ **Authentication Failure** - System-wide email delivery problem affecting resets
+- ✓ PDF export can be backlogged
+
+**Recommendation**: Prioritize cases 1-3 immediately; defer feature request to next sprint.

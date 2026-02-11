@@ -116,6 +116,21 @@ export class AppController {
     }
   }
 
+  // Join Teams Meeting Endpoint
+  @Post('calls/join-teams-meeting')
+  async joinTeamsMeeting(
+    @Body() body: { teamsLink: string; displayName?: string },
+  ) {
+    if (!body.teamsLink) {
+      return {
+        success: false,
+        error: 'teamsLink is required',
+      };
+    }
+
+    return this.appService.joinTeamsMeeting(body.teamsLink, body.displayName);
+  }
+
   // Recording Endpoints
 
   @Get('recordings')
@@ -123,7 +138,7 @@ export class AppController {
     try {
       const recordingsPath = join(process.cwd(), 'recordings');
       const files = readdirSync(recordingsPath);
-      
+
       const recordings = files
         .filter(file => file.endsWith('.wav'))
         .map(file => {
@@ -150,20 +165,19 @@ export class AppController {
     try {
       const recordingsPath = join(process.cwd(), 'recordings');
       const filePath = join(recordingsPath, filename);
-      
-      // Security check - ensure the file is in the recordings directory
+
       if (!filePath.startsWith(recordingsPath)) {
         res.status(403);
         return { error: 'Access denied' };
       }
 
       const file = createReadStream(filePath);
-      
+
       res.set({
         'Content-Type': 'audio/wav',
         'Content-Disposition': `inline; filename="${filename}"`,
       });
-      
+
       return new StreamableFile(file);
     } catch (error) {
       res.status(404);

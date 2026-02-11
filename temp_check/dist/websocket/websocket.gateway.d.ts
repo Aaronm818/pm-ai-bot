@@ -1,0 +1,43 @@
+import { OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
+import { Server, WebSocket } from 'ws';
+import { OpenAIRealtimeService } from './openai-realtime.service';
+import { ClaudeService } from './claude.service';
+import { TTSService } from './tts.service';
+import { FileOutputService } from './file-output.service';
+import { DataverseService } from './dataverse.service';
+export declare class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+    private readonly openAIRealtimeService;
+    private readonly claudeService;
+    private readonly ttsService;
+    private readonly fileOutputService;
+    private readonly dataverseService;
+    server: Server;
+    private readonly logger;
+    private clients;
+    private clientIdCounter;
+    constructor(openAIRealtimeService: OpenAIRealtimeService, claudeService: ClaudeService, ttsService: TTSService, fileOutputService: FileOutputService, dataverseService: DataverseService);
+    afterInit(): void;
+    private setupRealtimeCallbacks;
+    private sendToClient;
+    private findSessionByServerCallId;
+    private getClientId;
+    handleConnection(client: WebSocket): void;
+    handleDisconnect(client: WebSocket): void;
+    private handleMessage;
+    private handleStartSession;
+    private handleAudio;
+    private handleScreenshot;
+    private handleStopSession;
+    private handleTriggerResponse;
+    getConnectedAcsClients(): string[];
+    getAcsClientCount(): number;
+    getAudioSessionStats(): {
+        clientId: string;
+        connected: boolean;
+    }[];
+    sendAudioToAcsClient(clientId: string, audioData: string): boolean;
+    stopAudioForAcsClient(clientId: string): boolean;
+    broadcastToAllClients(eventType: string, data: any): void;
+    broadcastAudioData(audioData: string): void;
+    performCleanup(): void;
+}

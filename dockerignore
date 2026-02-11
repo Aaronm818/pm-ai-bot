@@ -1,0 +1,78 @@
+# ==============================================
+# PM AI Bot - Docker Ignore
+# Files to exclude from Docker build context
+# ==============================================
+
+# Dependencies (will be installed fresh in container)
+node_modules
+
+# Build output (will be built in container)
+dist
+
+# Development files
+.git
+.gitignore
+.vscode
+.idea
+*.md
+README*
+CHANGELOG*
+LICENSE
+
+# Environment files (secrets should be injected at runtime)
+.env
+.env.*
+*.local
+
+# Test files
+test
+tests
+*.test.js
+*.spec.js
+*.test.ts
+*.spec.ts
+coverage
+.nyc_output
+
+# Docker files
+Dockerfile
+Dockerfile.*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+azure-pipelines.yml
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Temporary files
+tmp
+temp
+*.tmp
+*.temp
+.cache
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Infrastructure as Code (not needed in container)
+infrastructure
+*.bicep
+
+# Deployment files
+deploy.zip
+temp_check
+.vscodeignore

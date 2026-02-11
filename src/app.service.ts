@@ -66,4 +66,9 @@ export class AppService {
       waitTimeMs,
     });
   }
+
+  // Join a Teams meeting
+  async joinTeamsMeeting(teamsLink: string, displayName?: string) {
+    return this.callAutomationService.joinTeamsMeeting(teamsLink, displayName);
+  }
 }

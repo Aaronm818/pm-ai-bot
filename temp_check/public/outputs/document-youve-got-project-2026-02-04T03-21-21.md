@@ -1,0 +1,3 @@
+I don't have any Google Sheets data connected right now. I can only see the support cases loaded from Dataverse - things like login issues, billing problems, and feature requests.
+
+If you want me to create a report, I'd be happy to generate one based on the case data I do have access to. I can create that document and put it in your Workspace. But I'd need you to either share the project timeline data with me another way, or let me know what specific information from my current cases you'd like me to pull into a report.

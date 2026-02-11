@@ -1,0 +1,3 @@
+I don't have access to your Google Sheets data right now. I can only see the support cases loaded from Dataverse, which shows you have 4 open cases including a customer portal login issue, a billing discrepancy, a password reset problem, and a PDF export feature request.
+
+If you want me to create a summary document for your workspace, I'd be happy to do that - but I'd need you to tell me what specific information you want included, since I can't pull from Google Sheets directly.

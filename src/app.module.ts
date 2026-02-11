@@ -11,7 +11,7 @@ import { CallAutomationModule } from './call-automation/call-automation.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    WebSocketModule,
+    WebSocketModule,  // Uses OpenAI Realtime (gpt-realtime full model)
     CallAutomationModule,
   ],
   controllers: [AppController],

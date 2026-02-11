@@ -1,0 +1,3 @@
+I'll create a report on your current cases for you. Give me a moment - you'll be able to view it in the Workspace once it's ready.
+
+Here's what I'm including: You have four active cases total. The login issue where the customer portal is down is your most critical item right now since it's blocking customer access. Then there's a billing discrepancy with invoice 4521 where a customer was charged twice, a password reset issue where confirmation emails aren't arriving, and a lower priority feature request for PDF export functionality. I'll format this as a clean summary document for you.

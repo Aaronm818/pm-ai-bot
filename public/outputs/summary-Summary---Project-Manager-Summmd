@@ -1,0 +1,31 @@
+# Case Summary Report
+
+## Overview
+Summary of current active support cases requiring attention and tracking.
+
+## Key Points
+- **4 Active Cases** currently in queue
+- **3 Critical Issues** affecting customer experience:
+  - Customer portal access down
+  - Billing discrepancy (duplicate charge)
+  - Password reset functionality broken
+- **1 Enhancement Request** (lower priority)
+
+## Current Status
+| Case | Issue | Priority | Status |
+|------|-------|----------|--------|
+| 1 | Login/Portal Access | Critical | Active |
+| 2 | Billing (Invoice #4521) | Critical | Active |
+| 3 | Password Reset | Critical | Active |
+| 4 | PDF Export Feature | Low | Active |
+
+## Notable Items Requiring Attention
+⚠️ **Urgent:** Cases 1-3 are blocking customer operations and should be prioritized immediately
+- Portal down = no account access
+- Duplicate billing = customer dissatisfaction
+- Reset email issues = account recovery blocked
+
+✓ **Track:** Case 4 can be scheduled for future sprint planning
+
+---
+*All cases marked Active | Recommend immediate review of critical items*

@@ -1,0 +1,28 @@
+# Case Summary Report
+
+## Overview
+This summary covers 4 active cases currently in the support queue, including critical system access issues, billing problems, and a feature enhancement request.
+
+## Key Points
+- **3 Critical Issues** requiring immediate attention
+  - Customer portal login functionality is down
+  - Billing system showing duplicate charges
+  - Password reset email delivery failure
+- **1 Low Priority Item**
+  - PDF export feature request (enhancement)
+
+## Current Status
+| Case | Priority | Status |
+|------|----------|--------|
+| Login issues | 🔴 Critical | Active - Portal down |
+| Billing discrepancy | 🔴 Critical | Active - Duplicate charge |
+| Password reset | 🔴 Critical | Active - Email issue |
+| PDF export | 🟡 Low | Active - Backlog |
+
+## Notable Items Requiring Attention
+- **Urgent**: Login and password reset issues are blocking customer access—recommend immediate investigation of email/authentication systems
+- **Financial Impact**: Billing discrepancy (Invoice #4521) needs resolution to prevent customer escalation
+- **Dependency**: Multiple issues may be related to same infrastructure problem
+
+---
+✅ Ready for workspace storage

@@ -1,0 +1,1 @@
+I'm a project management assistant, so I can't help with medical questions. Please consult a healthcare professional.

@@ -1,473 +1,517 @@
 import {
-  WebSocketGateway as NestWebSocketGateway,
+  WebSocketGateway as WSGateway,
   WebSocketServer,
+  OnGatewayInit,
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Server } from 'ws';
-import * as WebSocket from 'ws';
 import { Logger } from '@nestjs/common';
-import { AudioStreamingService } from './audio-streaming.service';
-import { AcsStreamingMessage, OutboundMessage } from './audio-streaming.types';
-import { IncomingMessage } from 'http';
+import { Server, WebSocket } from 'ws';
+import { OpenAIRealtimeService } from './openai-realtime.service';
+import { ClaudeService } from './claude.service';
+import { TTSService } from './tts.service';
+import { FileOutputService } from './file-output.service';
+import { DataverseService } from './dataverse.service';
 
-@NestWebSocketGateway({
-  path: '/ws',
-  transports: ['websocket'],
+/**
+ * WebSocket Gateway for PM AI Bot
+ * 
+ * Uses OpenAI Realtime API (gpt-realtime full model) for Speech-to-Speech
+ * Uses native WebSocket (ws library)
+ */
+
+interface ClientSession {
+  socket: WebSocket;
+  serverCallId: string;
+  realtimeConnected: boolean;
+  meetingContext?: string;
+  userName?: string;
+  latestScreenshot?: string;
+}
+
+@WSGateway({
+  cors: {
+    origin: '*',
+  },
 })
-export class WebSocketGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  private logger: Logger = new Logger('AcsAudioStreamingGateway');
-  private acsClients: Map<WebSocket, string> = new Map(); // Track ACS audio streaming connections
-  private clientToServerCallId: Map<WebSocket, string> = new Map(); // Map client to server call ID
-  private serverCallIdToClients: Map<string, Set<WebSocket>> = new Map(); // Map server call ID to clients
+  private readonly logger = new Logger(WebSocketGateway.name);
+  private clients: Map<string, ClientSession> = new Map();
+  private clientIdCounter = 0;
 
-  constructor(private readonly audioStreamingService: AudioStreamingService) {}
+  constructor(
+    private readonly openAIRealtimeService: OpenAIRealtimeService,
+    private readonly claudeService: ClaudeService,
+    private readonly ttsService: TTSService,
+    private readonly fileOutputService: FileOutputService,
+    private readonly dataverseService: DataverseService,
+  ) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  handleConnection(client: WebSocket, request: IncomingMessage) {
-    const clientId = this.generateClientId();
-    
-    // Extract server call ID from URL path
-    const serverCallId = this.extractServerCallIdFromUrl(request.url);
-    
-    this.logger.log(`ACS audio streaming client connected: ${clientId}${serverCallId ? ` for server call: ${serverCallId}` : ''}`);
+  afterInit() {
+    this.logger.log('✅ WebSocketGateway initialized');
+    this.logger.log('   Voice Engine: OpenAI Realtime API (gpt-realtime full model)');
+    this.logger.log('   Architecture: True S2S with wake word detection');
 
-    // Store client mappings
-    if (serverCallId) {
-      this.clientToServerCallId.set(client, serverCallId);
-      
-      if (!this.serverCallIdToClients.has(serverCallId)) {
-        this.serverCallIdToClients.set(serverCallId, new Set());
-      }
-      this.serverCallIdToClients.get(serverCallId)!.add(client);
-    }
+    // Wire up Claude to get cached Dataverse data
+    this.claudeService.setCachedDataCallback(() => {
+      return this.dataverseService.getCachedTasksSummary();
+    });
 
-    // Set up raw message handler for ACS audio streaming
-    client.on('message', async (data: Buffer) => {
-      try {
-        await this.handleAcsMessage(client, data, clientId);
-      } catch (error) {
-        this.logger.error(
-          `Error handling ACS message from ${clientId}:`,
-          error,
-        );
-        this.sendErrorToClient(client, error.message);
+    // Set up OpenAI Realtime callbacks
+    this.setupRealtimeCallbacks();
+  }
+
+  private setupRealtimeCallbacks() {
+    // Track S2S speaking state per session
+    const s2sSpeakingState = new Map<string, boolean>();
+
+    // Audio response callback - send S2S audio to client
+    this.openAIRealtimeService.setAudioResponseCallback((serverCallId, audioBase64) => {
+      const session = this.findSessionByServerCallId(serverCallId);
+      if (session && session.socket.readyState === WebSocket.OPEN) {
+        // Send speaking_state true when first audio arrives
+        if (!s2sSpeakingState.get(serverCallId)) {
+          s2sSpeakingState.set(serverCallId, true);
+          this.sendToClient(session.socket, 'speaking_state', { isSpeaking: true });
+        }
+        
+        this.sendToClient(session.socket, 'audio', {
+          audio: audioBase64,
+          source: 'S2S',
+          format: 'pcm16',
+          sampleRate: 24000,
+        });
+        this.logger.debug(`🔊 [S2S] Sent audio: ${audioBase64.length} bytes`);
       }
     });
 
-    // Send welcome message for ACS connection
-    client.send(
-      JSON.stringify({
-        type: 'acs_connection_ready',
-        message:
-          'Connected - Ready for Azure Communication Services audio streaming',
-        clientId: clientId,
-        serverCallId: serverCallId,
-        timestamp: new Date().toISOString(),
-      }),
-    );
+    // Transcript callback - send transcripts to client
+    this.openAIRealtimeService.setTranscriptCallback((serverCallId, text, isFinal) => {
+      const session = this.findSessionByServerCallId(serverCallId);
+      if (session && session.socket.readyState === WebSocket.OPEN) {
+        this.sendToClient(session.socket, 'transcript', {
+          text,
+          isFinal,
+          source: 'user',
+        });
+      }
+    });
+
+    // Vision context callback - return latest screenshot
+    this.openAIRealtimeService.setVisionContextCallback((serverCallId) => {
+      const session = this.findSessionByServerCallId(serverCallId);
+      return session?.latestScreenshot || null;
+    });
+
+    // Speaking state callback - also clears S2S state
+    this.openAIRealtimeService.setSpeakingStateChangedCallback((serverCallId, isSpeaking) => {
+      const session = this.findSessionByServerCallId(serverCallId);
+      if (session && session.socket.readyState === WebSocket.OPEN) {
+        // Clear S2S speaking state when AI stops speaking
+        if (!isSpeaking) {
+          s2sSpeakingState.set(serverCallId, false);
+        }
+        this.sendToClient(session.socket, 'speaking_state', { isSpeaking });
+      }
+    });
+
+    // PM text response callback - for TTS fallback
+    this.openAIRealtimeService.setPmTextResponseCallback(async (serverCallId, text) => {
+      const session = this.findSessionByServerCallId(serverCallId);
+      if (session && session.socket.readyState === WebSocket.OPEN) {
+        this.sendToClient(session.socket, 'pm_response', { text, source: 'pm' });
+
+        const ttsResult = await this.ttsService.textToSpeech(text);
+        if (ttsResult.audioBase64 && !ttsResult.error) {
+          this.sendToClient(session.socket, 'audio', {
+            audio: ttsResult.audioBase64,
+            source: 'TTS',
+            format: 'pcm16',
+            sampleRate: 24000,
+          });
+        }
+      }
+    });
+
+    // Claude request callback
+    this.openAIRealtimeService.setClaudeRequestCallback(async (serverCallId, transcript, visionContext) => {
+      const session = this.findSessionByServerCallId(serverCallId);
+      if (!session) return;
+
+      this.logger.log(`🧠 Claude request: "${transcript}"`);
+
+      try {
+        const response = await this.claudeService.chat(serverCallId, transcript, visionContext || undefined);
+
+        if (response.error) {
+          this.logger.error(`Claude error: ${response.error}`);
+          this.sendToClient(session.socket, 'error', { message: response.error, source: 'claude' });
+          return;
+        }
+
+        this.sendToClient(session.socket, 'claude_response', { text: response.text, source: 'claude' });
+
+        // Check if Claude generated a document
+        if (response.document && response.document.content) {
+          this.logger.log(`📄 Document generated by Claude: ${response.document.type}`);
+          const filename = `${response.document.type}-${response.document.title.replace(/[^a-zA-Z0-9]/g, '-').substring(0, 30)}`;
+          
+          const savedFile = await this.fileOutputService.saveContent(
+            serverCallId,
+            response.document.content,
+            filename,
+            'md',
+            response.document.type,
+          );
+          
+          this.sendToClient(session.socket, 'file_saved', {
+            filename: savedFile.filename,
+            url: savedFile.url,
+            documentType: savedFile.type,
+            content: response.document.content,
+          });
+          this.logger.log(`📄 file_saved message sent to client: ${savedFile.filename}`);
+        } else {
+          // Regular response - check if it should be saved
+          const analysis = this.fileOutputService.analyzeContent(transcript, response.text);
+          if (analysis.shouldSave && analysis.suggestedFilename) {
+            const savedFile = await this.fileOutputService.saveContent(
+              serverCallId,
+              response.text,
+              analysis.suggestedFilename,
+              analysis.fileExtension,
+              analysis.contentType,
+            );
+            this.sendToClient(session.socket, 'file_saved', {
+              filename: savedFile.filename,
+              url: savedFile.url,
+              documentType: savedFile.type,
+            });
+          }
+        }
+
+        const ttsResult = await this.ttsService.textToSpeech(response.text);
+        if (ttsResult.audioBase64 && !ttsResult.error) {
+          this.sendToClient(session.socket, 'audio', {
+            audio: ttsResult.audioBase64,
+            source: 'TTS',
+            format: 'pcm16',
+            sampleRate: 24000,
+          });
+        }
+      } catch (error) {
+        this.logger.error('Claude request failed:', error);
+        this.sendToClient(session.socket, 'error', { message: `Claude error: ${error.message}`, source: 'claude' });
+      }
+    });
+
+    // Silent document callback (PM generates document silently while speaking)
+    this.openAIRealtimeService.setSilentDocumentCallback(async (serverCallId, transcript) => {
+      const session = this.findSessionByServerCallId(serverCallId);
+      if (!session) {
+        this.logger.warn(`📄 No session found for serverCallId: ${serverCallId}`);
+        return;
+      }
+
+      this.logger.log(`📄 Silent document request: "${transcript}"`);
+      this.logger.log(`📄 Calling Claude for document generation...`);
+
+      try {
+        const response = await this.claudeService.chat(serverCallId, transcript, undefined);
+
+        this.logger.log(`📄 Claude response received: text=${response.text?.length || 0} chars, document=${response.document ? 'yes' : 'no'}`);
+
+        if (response.error) {
+          this.logger.error('Document generation failed:', response.error);
+          this.sendToClient(session.socket, 'error', { 
+            message: `Document generation failed: ${response.error}`, 
+            source: 'claude' 
+          });
+          return;
+        }
+
+        // Check if Claude generated a document (this is the expected path)
+        if (response.document && response.document.content) {
+          this.logger.log(`📄 Document generated: ${response.document.type} - ${response.document.title}`);
+          const filename = `${response.document.type}-${response.document.title.replace(/[^a-zA-Z0-9]/g, '-').substring(0, 30)}`;
+          
+          const savedFile = await this.fileOutputService.saveContent(
+            serverCallId,
+            response.document.content,
+            filename,
+            'md',
+            response.document.type,
+          );
+          this.logger.log(`📄 File saved: ${savedFile.filename}`);
+          
+          this.sendToClient(session.socket, 'file_saved', {
+            filename: savedFile.filename,
+            url: savedFile.url,
+            documentType: savedFile.type,
+            content: response.document.content,
+          });
+          this.logger.log(`📄 file_saved message sent to client`);
+        } else if (response.text) {
+          // Fallback: Save the text response if no document
+          this.logger.warn(`📄 No document object, saving text response instead`);
+          const savedFile = await this.fileOutputService.saveContent(
+            serverCallId,
+            response.text,
+            'Generated-Document',
+            'md',
+            'document',
+          );
+          
+          this.sendToClient(session.socket, 'file_saved', {
+            filename: savedFile.filename,
+            url: savedFile.url,
+            documentType: 'document',
+            content: response.text,
+          });
+        } else {
+          this.logger.error('No content returned from Claude');
+        }
+      } catch (error) {
+        this.logger.error('Document generation failed:', error);
+        this.sendToClient(session.socket, 'error', { 
+          message: `Document generation error: ${error.message}`, 
+          source: 'claude' 
+        });
+      }
+      
+      this.logger.log(`📄 Silent document callback completed`);
+    });
+  }
+
+  private sendToClient(client: WebSocket, type: string, data: any) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({ type, ...data }));
+    }
+  }
+
+  private findSessionByServerCallId(serverCallId: string): ClientSession | undefined {
+    for (const session of this.clients.values()) {
+      if (session.serverCallId === serverCallId) {
+        return session;
+      }
+    }
+    return undefined;
+  }
+
+  private getClientId(client: WebSocket): string | undefined {
+    for (const [id, session] of this.clients) {
+      if (session.socket === client) {
+        return id;
+      }
+    }
+    return undefined;
+  }
+
+  handleConnection(client: WebSocket) {
+    const clientId = `client-${++this.clientIdCounter}`;
+    const serverCallId = `call-${clientId}-${Date.now()}`;
+    
+    this.logger.log(`Client connected: ${clientId}`);
+    
+    this.clients.set(clientId, {
+      socket: client,
+      serverCallId,
+      realtimeConnected: false,
+    });
+
+    // Send connection confirmation
+    this.sendToClient(client, 'connected', {
+      clientId,
+      serverCallId,
+      engine: 'OpenAI Realtime (gpt-realtime)',
+      message: 'Connected to PM AI Bot',
+    });
+
+    // Set up message handler
+    client.on('message', (data: Buffer) => {
+      try {
+        const message = JSON.parse(data.toString());
+        this.handleMessage(client, clientId, message);
+      } catch (error) {
+        this.logger.error('Failed to parse message:', error);
+      }
+    });
   }
 
   handleDisconnect(client: WebSocket) {
-    const clientId = this.acsClients.get(client);
-    const serverCallId = this.clientToServerCallId.get(client);
-    
+    const clientId = this.getClientId(client);
     if (clientId) {
-      this.logger.log(`ACS client disconnected: ${clientId}${serverCallId ? ` from server call: ${serverCallId}` : ''}`);
-
-      // Clean up audio session
-      this.audioStreamingService.endAudioSession(clientId);
-      this.acsClients.delete(client);
-
-      // Clean up server call ID mappings
-      if (serverCallId) {
-        this.clientToServerCallId.delete(client);
-        const clients = this.serverCallIdToClients.get(serverCallId);
-        if (clients) {
-          clients.delete(client);
-          if (clients.size === 0) {
-            this.serverCallIdToClients.delete(serverCallId);
-          }
-        }
+      this.logger.log(`Client disconnected: ${clientId}`);
+      const session = this.clients.get(clientId);
+      if (session?.realtimeConnected) {
+        this.openAIRealtimeService.endSession(session.serverCallId);
       }
-
-      this.logger.log(`ACS audio session ended for ${clientId}`);
+      this.clients.delete(clientId);
     }
   }
 
-  // Handle ACS audio streaming messages
-  private async handleAcsMessage(
-    client: WebSocket,
-    data: Buffer,
-    clientId: string,
-  ): Promise<void> {
-    try {
-      // Parse JSON message
-      const message = JSON.parse(data.toString('utf8'));
+  private async handleMessage(client: WebSocket, clientId: string, message: any) {
+    const session = this.clients.get(clientId);
+    if (!session) return;
 
-      // Check if this is an ACS streaming message
-      if (this.isAcsStreamingMessage(message)) {
-        await this.handleAcsStreamingMessage(client, message, clientId);
-      } else {
-        this.logger.warn(`Non-ACS message received from ${clientId}:`, message);
-        this.sendErrorToClient(
-          client,
-          'Only ACS audio streaming messages are supported',
-        );
-      }
-    } catch (jsonError) {
-      this.logger.error(`Invalid JSON message from ${clientId}:`, jsonError);
-      this.sendErrorToClient(client, 'Invalid JSON format');
+    switch (message.type) {
+      case 'start_session':
+        await this.handleStartSession(session, message);
+        break;
+      case 'audio':
+        this.handleAudio(session, message);
+        break;
+      case 'screenshot':
+      case 'vision_frame':
+        this.handleScreenshot(session, message);
+        break;
+      case 'stop_session':
+        this.handleStopSession(session);
+        break;
+      case 'trigger_response':
+        this.handleTriggerResponse(session);
+        break;
+      default:
+        this.logger.warn(`Unknown message type: ${message.type}`);
     }
   }
 
-  private async handleAcsStreamingMessage(
-    client: WebSocket,
-    message: AcsStreamingMessage,
-    clientId: string,
-  ): Promise<void> {
-    if (!this.acsClients.has(client)) {
-      this.acsClients.set(client, clientId);
-      this.logger.log(`ACS client connected: ${clientId}`);
-    }
+  private async handleStartSession(session: ClientSession, data: any) {
+    this.logger.log(`Starting OpenAI Realtime session for ${session.serverCallId}`);
+
+    session.meetingContext = data?.meetingContext;
+    session.userName = data?.userName;
 
     try {
-      if (message.kind === 'AudioMetadata') {
-        await this.handleAudioMetadata(client, message, clientId);
-      } else if (message.kind === 'AudioData') {
-        await this.handleAudioData(client, message, clientId);
+      const connected = await this.openAIRealtimeService.createSession(session.serverCallId);
+
+      if (connected) {
+        session.realtimeConnected = true;
+        
+        const dataverseData = this.dataverseService.getCachedTasks();
+        
+        this.sendToClient(session.socket, 'session_started', {
+          serverCallId: session.serverCallId,
+          engine: 'OpenAI Realtime (gpt-realtime)',
+          message: 'S2S session active',
+          dataverseRecords: dataverseData.count,
+        });
+
+        this.logger.log(`📊 Dataverse cache: ${dataverseData.count} tasks available`);
       } else {
-        this.logger.warn(
-          `Unknown ACS message kind "${message.kind}" from ${clientId}`,
-        );
+        this.sendToClient(session.socket, 'error', {
+          message: 'Failed to connect to OpenAI Realtime. Check OPENAI_ENDPOINT and OPENAI_API_KEY.',
+          source: 'gateway',
+        });
       }
     } catch (error) {
-      this.logger.error(
-        `Error processing ACS message from ${clientId}:`,
-        error,
-      );
-      this.sendToAcsClient(client, {
-        Kind: 'Error',
-        AudioData: null,
-        StopAudio: null,
-        Error: { message: error.message },
+      this.logger.error('Failed to start session:', error);
+      this.sendToClient(session.socket, 'error', {
+        message: `Session start failed: ${error.message}`,
+        source: 'gateway',
       });
     }
   }
 
-  private async handleAudioMetadata(
-    client: WebSocket,
-    message: AcsStreamingMessage,
-    clientId: string,
-  ): Promise<void> {
-    if (!message.audioMetadata) {
-      throw new Error('Audio metadata is missing');
-    }
-
-    if (
-      !this.audioStreamingService.validateAudioMetadata(message.audioMetadata)
-    ) {
-      throw new Error('Invalid audio metadata');
-    }
-
-    this.audioStreamingService.processAudioMetadata(
-      message.audioMetadata,
-      clientId,
-    );
-
-    this.logger.log(`Audio session started: ${clientId}`);
-  }
-
-  private async handleAudioData(
-    client: WebSocket,
-    message: AcsStreamingMessage,
-    clientId: string,
-  ): Promise<void> {
-    if (!message.audioData) {
-      throw new Error('Audio data is missing');
-    }
-
-    const result = await this.audioStreamingService.processAudioData(
-      message.audioData,
-      clientId,
-    );
-
-    if (result.error) {
-      throw new Error(result.error);
-    }
-
-    if (
-      result.processedData &&
-      result.processedData !== message.audioData.data
-    ) {
-      const outboundMessage =
-        this.audioStreamingService.createOutboundAudioData(
-          result.processedData,
-        );
-      this.sendToAcsClient(client, outboundMessage);
-    }
-
-    if (result.shouldStop) {
-      const stopMessage = this.audioStreamingService.createStopAudioMessage();
-      this.sendToAcsClient(client, stopMessage);
+  private handleAudio(session: ClientSession, data: any) {
+    if (!session.realtimeConnected) return;
+    const audioData = data.audio || data.data;
+    if (audioData) {
+      this.openAIRealtimeService.sendAudio(session.serverCallId, audioData);
     }
   }
 
-  // Check if message is from ACS
-  private isAcsStreamingMessage(message: any): message is AcsStreamingMessage {
-    return (
-      message &&
-      typeof message.kind === 'string' &&
-      (message.kind === 'AudioMetadata' || message.kind === 'AudioData')
-    );
+  private handleScreenshot(session: ClientSession, data: any) {
+    session.latestScreenshot = data.image;
+    this.logger.debug('Screenshot received and stored');
   }
 
-  // Send message to ACS client
-  private sendToAcsClient(client: WebSocket, message: OutboundMessage): void {
-    if (client.readyState === WebSocket.OPEN) {
-      const messageString = JSON.stringify(message);
-      client.send(messageString);
-      this.logger.debug('Sent message to ACS:', message.Kind);
+  private handleStopSession(session: ClientSession) {
+    if (session.realtimeConnected) {
+      this.openAIRealtimeService.endSession(session.serverCallId);
+      session.realtimeConnected = false;
+      this.sendToClient(session.socket, 'session_ended', { reason: 'User requested stop' });
     }
   }
 
-  // Send error message to client
-  private sendErrorToClient(client: WebSocket, errorMessage: string): void {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(
-        JSON.stringify({
-          type: 'error',
-          message: errorMessage,
-          timestamp: new Date().toISOString(),
-        }),
-      );
+  private handleTriggerResponse(session: ClientSession) {
+    if (session.realtimeConnected) {
+      this.openAIRealtimeService.triggerResponse(session.serverCallId);
     }
   }
 
-  private generateClientId(): string {
-    return 'acs_client_' + Math.random().toString(36).substr(2, 9);
-  }
+  // ============================================
+  // ACS Compatibility Methods
+  // ============================================
 
-  private extractServerCallIdFromUrl(url: string | undefined): string | null {
-    if (!url) return null;
-
-    // Try to extract from query string: ?serverCallId=<idHere>
-    const queryMatch = url.match(/[?&]serverCallId=([^&]+)/);
-    if (queryMatch && queryMatch[1]) {
-      return decodeURIComponent(queryMatch[1]);
-    }
-
-    // Fallback: Handle both /ws and /ws/<servercallid> patterns
-    const pathMatch = url.match(/^\/ws(?:\/([^/?]+))?/);
-    return pathMatch && pathMatch[1] ? pathMatch[1] : null;
-  }
-
-  // Public methods for service integration
-
-  // Broadcast message to all connected clients
-  broadcastToAllClients(eventType: string, data: any): void {
-    const message = {
-      type: eventType,
-      data: data,
-      timestamp: new Date().toISOString(),
-    };
-
-    // Broadcast to all WebSocket clients
-    if (this.server?.clients) {
-      this.server.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(message));
-        }
-      });
-
-      this.logger.debug(
-        `Broadcasted ${eventType} event to ${this.server.clients.size} clients`,
-      );
-    }
-  }
-
-  // Broadcast audio data to all connected clients
-  broadcastAudioData(audioData: any): void {
-    const message = {
-      type: 'teams-audio-data',
-      data: audioData,
-      timestamp: new Date().toISOString(),
-    };
-
-    // Broadcast to all WebSocket clients
-    if (this.server?.clients) {
-      this.server.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(message));
-        }
-      });
-
-      this.logger.debug(
-        `Broadcasted Teams audio data to ${this.server.clients.size} clients`,
-      );
-    }
-  }
-
-  // Get all connected ACS clients
   getConnectedAcsClients(): string[] {
-    return Array.from(this.acsClients.values());
+    return Array.from(this.clients.keys());
   }
 
-  // Get ACS client count
   getAcsClientCount(): number {
-    return this.acsClients.size;
+    return this.clients.size;
   }
 
-  // Get audio session statistics
-  getAudioSessionStats() {
-    return this.audioStreamingService.getSessionStats();
-  }
-
-  // Send audio data to specific ACS client
-  sendAudioToAcsClient(serverCallId: string, audioData: string): boolean {
-    const clients = this.serverCallIdToClients.get(serverCallId);
-    if (!clients || clients.size === 0) {
-      this.logger.warn(`No clients connected for server call ID: ${serverCallId}`);
-      return false;
+  getAudioSessionStats(): { clientId: string; connected: boolean }[] {
+    const stats: { clientId: string; connected: boolean }[] = [];
+    for (const [clientId, session] of this.clients) {
+      stats.push({ clientId, connected: session.realtimeConnected });
     }
-
-    // Send audio data to all connected clients for the server call ID
-    clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        const message = this.audioStreamingService.createOutboundAudioData(audioData);
-        this.sendToAcsClient(client, message);
-      }
-    });
-
-    return true;
+    return stats;
   }
 
-  // Stop audio for specific ACS client
-  stopAudioForAcsClient(clientId: string): boolean {
-    for (const [client, id] of this.acsClients.entries()) {
-      if (id === clientId && client.readyState === WebSocket.OPEN) {
-        const stopMessage = this.audioStreamingService.createStopAudioMessage();
-        this.sendToAcsClient(client, stopMessage);
-        return true;
-      }
+  sendAudioToAcsClient(clientId: string, audioData: string): boolean {
+    const session = this.clients.get(clientId);
+    if (session) {
+      this.sendToClient(session.socket, 'audio', {
+        audio: audioData,
+        source: 'S2S',
+        format: 'pcm16',
+        sampleRate: 24000,
+      });
+      return true;
     }
     return false;
   }
 
-  // Cleanup method to be called periodically
-  performCleanup(): void {
-    this.audioStreamingService.cleanupInactiveSessions();
+  stopAudioForAcsClient(clientId: string): boolean {
+    const session = this.clients.get(clientId);
+    if (session) {
+      this.sendToClient(session.socket, 'audio_stopped', { reason: 'Server requested stop' });
+      return true;
+    }
+    return false;
   }
 
-  // New methods for server call ID management
+  broadcastToAllClients(eventType: string, data: any) {
+    for (const session of this.clients.values()) {
+      this.sendToClient(session.socket, eventType, data);
+    }
+  }
 
-  // Get all connected clients for a specific server call ID
-  getClientsByServerCallId(serverCallId: string): string[] {
-    const clients = this.serverCallIdToClients.get(serverCallId);
-    if (!clients) return [];
-    
-    const clientIds: string[] = [];
-    for (const client of clients) {
-      const clientId = this.acsClients.get(client);
-      if (clientId) {
-        clientIds.push(clientId);
+  broadcastAudioData(audioData: string) {
+    for (const session of this.clients.values()) {
+      this.sendToClient(session.socket, 'audio', {
+        audio: audioData,
+        source: 'S2S',
+        format: 'pcm16',
+        sampleRate: 24000,
+      });
+    }
+  }
+
+  performCleanup() {
+    for (const [clientId, session] of this.clients) {
+      if (session.socket.readyState !== WebSocket.OPEN) {
+        this.logger.log(`Cleaning up disconnected client: ${clientId}`);
+        if (session.realtimeConnected) {
+          this.openAIRealtimeService.endSession(session.serverCallId);
+        }
+        this.clients.delete(clientId);
       }
     }
-    return clientIds;
-  }
-
-  // Get server call ID for a specific client
-  getServerCallIdByClient(clientId: string): string | null {
-    for (const [client, id] of this.acsClients.entries()) {
-      if (id === clientId) {
-        return this.clientToServerCallId.get(client) || null;
-      }
-    }
-    return null;
-  }
-
-  // Broadcast message to all clients connected to a specific server call ID
-  broadcastToServerCall(serverCallId: string, eventType: string, data: any): void {
-    const clients = this.serverCallIdToClients.get(serverCallId);
-    if (!clients || clients.size === 0) {
-      this.logger.warn(`No clients connected for server call ID: ${serverCallId}`);
-      return;
-    }
-
-    const message = {
-      type: eventType,
-      data: data,
-      serverCallId: serverCallId,
-      timestamp: new Date().toISOString(),
-    };
-
-    clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(message));
-      }
-    });
-
-    this.logger.debug(
-      `Broadcasted ${eventType} event to ${clients.size} clients for server call ${serverCallId}`,
-    );
-  }
-
-  // Send audio data to all clients connected to a specific server call ID
-  sendAudioToServerCall(serverCallId: string, audioData: string): boolean {
-    const clients = this.serverCallIdToClients.get(serverCallId);
-    if (!clients || clients.size === 0) {
-      return false;
-    }
-
-    let sentCount = 0;
-    clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        const message = this.audioStreamingService.createOutboundAudioData(audioData);
-        this.sendToAcsClient(client, message);
-        sentCount++;
-      }
-    });
-
-    this.logger.debug(`Sent audio data to ${sentCount} clients for server call ${serverCallId}`);
-    return sentCount > 0;
-  }
-
-  // Stop audio for all clients connected to a specific server call ID
-  stopAudioForServerCall(serverCallId: string): boolean {
-    const clients = this.serverCallIdToClients.get(serverCallId);
-    if (!clients || clients.size === 0) {
-      return false;
-    }
-
-    let stoppedCount = 0;
-    clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        const stopMessage = this.audioStreamingService.createStopAudioMessage();
-        this.sendToAcsClient(client, stopMessage);
-        stoppedCount++;
-      }
-    });
-
-    this.logger.debug(`Stopped audio for ${stoppedCount} clients for server call ${serverCallId}`);
-    return stoppedCount > 0;
-  }
-
-  // Get all active server call IDs
-  getActiveServerCallIds(): string[] {
-    return Array.from(this.serverCallIdToClients.keys());
-  }
-
-  // Get statistics for server call connections
-  getServerCallStats(): { [serverCallId: string]: number } {
-    const stats: { [serverCallId: string]: number } = {};
-    for (const [serverCallId, clients] of this.serverCallIdToClients.entries()) {
-      stats[serverCallId] = clients.size;
-    }
-    return stats;
   }
 }

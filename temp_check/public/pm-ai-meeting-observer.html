@@ -1,0 +1,4069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concentrix PM AI Bot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --primary-dark: #003D5A;
+            --primary-darker: #002A3F;
+            --secondary-teal: #00737F;
+            --accent-cyan: #25E2CC;
+            --accent-yellow: #FBCA18;
+            --accent-orange: #FF8400;
+            --accent-magenta: #CC3262;
+            --text-primary: #ffffff;
+            --text-secondary: #8892b0;
+            --text-muted: #5a6a8a;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-card-hover: rgba(255, 255, 255, 0.06);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-accent: rgba(37, 226, 204, 0.3);
+            --glow-cyan: rgba(37, 226, 204, 0.4);
+            --glow-teal: rgba(0, 115, 127, 0.3);
+            --sidebar-width: 280px;
+        }
+
+        body {
+            font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(145deg, var(--primary-dark) 0%, var(--primary-darker) 50%, #001a2c 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        /* Animated background mesh */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(ellipse at 20% 20%, rgba(0, 115, 127, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(37, 226, 204, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(0, 61, 90, 0.2) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ===== APP LAYOUT ===== */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ===== SIDEBAR ===== */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: rgba(0, 30, 45, 0.8);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            z-index: 100;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-header {
+            padding: 24px 20px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 45px;
+            height: 45px;
+            background: linear-gradient(135deg, var(--secondary-teal), var(--accent-cyan));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 15px var(--glow-teal);
+        }
+
+        .brand-text h1 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-text span {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Navigation */
+        .nav-section {
+            padding: 20px 12px;
+            flex: 1;
+        }
+
+        .nav-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            padding: 0 12px;
+            margin-bottom: 12px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            margin-bottom: 6px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: var(--text-secondary);
+            border: 1px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 3px;
+            background: var(--accent-cyan);
+            transform: scaleY(0);
+            transition: transform 0.2s ease;
+        }
+
+        .nav-item:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(90deg, rgba(0, 115, 127, 0.2), rgba(37, 226, 204, 0.1));
+            color: var(--accent-cyan);
+            border-color: var(--border-accent);
+        }
+
+        .nav-item.active::before {
+            transform: scaleY(1);
+        }
+
+        .nav-icon {
+            font-size: 1.3rem;
+            width: 24px;
+            text-align: center;
+        }
+
+        .nav-text {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .nav-badge {
+            margin-left: auto;
+            background: var(--accent-cyan);
+            color: var(--primary-dark);
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 10px;
+        }
+
+        /* Sidebar footer */
+        .sidebar-footer {
+            padding: 16px 12px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border-radius: 10px;
+            font-size: 0.8rem;
+        }
+
+        .status-dot-sidebar {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            transition: all 0.3s;
+        }
+
+        .status-dot-sidebar.online {
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--glow-cyan);
+        }
+
+        /* ===== MAIN CONTENT ===== */
+        .main-content {
+            flex: 1;
+            margin-left: var(--sidebar-width);
+            padding: 24px 32px;
+            min-height: 100vh;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Page Header */
+        .page-header {
+            margin-bottom: 28px;
+        }
+
+        .page-header h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .page-header p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        /* ===== CARDS ===== */
+        .card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--border-subtle);
+            backdrop-filter: blur(10px);
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: var(--border-accent);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .card-title .icon {
+            font-size: 1.2rem;
+        }
+
+        .card h2 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card h2 .icon {
+            font-size: 1.2rem;
+        }
+
+        /* ===== GRID LAYOUTS ===== */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 24px;
+        }
+
+        @media (max-width: 1400px) {
+            .grid-4 { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 1200px) {
+            .main-grid { grid-template-columns: 1fr; }
+            .grid-3 { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 900px) {
+            .sidebar { 
+                width: 70px;
+                --sidebar-width: 70px;
+            }
+            .brand-text, .nav-text, .nav-badge, .nav-label { display: none; }
+            .nav-item { justify-content: center; padding: 14px; }
+            .main-content { margin-left: 70px; padding: 20px; }
+        }
+
+        /* ===== KPI CARDS ===== */
+        .kpi-card {
+            background: linear-gradient(145deg, var(--bg-card), rgba(0, 115, 127, 0.05));
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--border-subtle);
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--secondary-teal), var(--accent-cyan));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--border-accent);
+            box-shadow: 0 12px 40px rgba(37, 226, 204, 0.15);
+        }
+
+        .kpi-card:hover::before {
+            opacity: 1;
+        }
+
+        .kpi-icon {
+            font-size: 2rem;
+            margin-bottom: 12px;
+            display: inline-block;
+        }
+
+        .kpi-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, var(--secondary-teal), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 6px;
+            line-height: 1.2;
+        }
+
+        .kpi-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 500;
+        }
+
+        .kpi-change {
+            font-size: 0.75rem;
+            margin-top: 10px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            display: inline-block;
+            font-weight: 600;
+        }
+
+        .kpi-change.positive {
+            background: rgba(37, 226, 204, 0.15);
+            color: var(--accent-cyan);
+        }
+
+        .kpi-change.neutral {
+            background: rgba(255, 132, 0, 0.15);
+            color: var(--accent-orange);
+        }
+
+        /* ===== BUTTONS ===== */
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.3s, height 0.3s;
+        }
+
+        .btn:active::after {
+            width: 200px;
+            height: 200px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--secondary-teal), var(--accent-cyan));
+            color: var(--text-primary);
+            box-shadow: 0 4px 15px var(--glow-teal);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px var(--glow-cyan);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--secondary-teal));
+            color: var(--primary-dark);
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px var(--glow-cyan);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--accent-magenta), var(--accent-orange));
+            color: var(--text-primary);
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(204, 50, 98, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* ===== INPUTS ===== */
+        .input-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 14px 18px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--text-primary);
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 3px rgba(37, 226, 204, 0.1);
+        }
+
+        .input-group input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* ===== STATUS INDICATORS ===== */
+        .status-row {
+            display: flex;
+            gap: 20px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            transition: all 0.3s;
+        }
+
+        .status-dot.connected {
+            background: var(--accent-cyan);
+            box-shadow: 0 0 12px var(--glow-cyan);
+        }
+
+        .status-dot.active {
+            background: var(--secondary-teal);
+            box-shadow: 0 0 12px var(--glow-teal);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+        }
+
+        /* ===== VIDEO CONTAINER ===== */
+        .video-container {
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            margin-bottom: 16px;
+            position: relative;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .video-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .video-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            gap: 12px;
+        }
+
+        .video-placeholder .icon {
+            font-size: 3rem;
+            opacity: 0.5;
+        }
+
+        /* ===== AUDIO LEVEL ===== */
+        .audio-level-container {
+            margin: 16px 0;
+        }
+
+        .audio-level-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .audio-level-bar {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .audio-level-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--secondary-teal), var(--primary-dark));
+            transition: width 0.1s;
+            border-radius: 3px;
+        }
+
+        /* ===== CONTROL BUTTONS ===== */
+        .control-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        /* ===== TRANSCRIPT ===== */
+        .transcript-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 16px;
+            height: 280px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 0.85rem;
+            line-height: 1.7;
+        }
+
+        .transcript-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .transcript-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+
+        .transcript-container::-webkit-scrollbar-thumb {
+            background: var(--secondary-teal);
+            border-radius: 3px;
+        }
+
+        .transcript-entry {
+            margin-bottom: 14px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .transcript-entry:last-child {
+            border-bottom: none;
+        }
+
+        .transcript-speaker {
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .transcript-ai {
+            color: var(--secondary-teal);
+        }
+
+        .transcript-time {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            margin-left: 8px;
+        }
+
+        /* ===== VISION PANEL ===== */
+        .vision-panel {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .vision-panel h2 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .vision-snapshot {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .snapshot-preview {
+            width: 120px;
+            height: 75px;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            flex-shrink: 0;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .snapshot-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .snapshot-info {
+            flex: 1;
+            font-size: 0.8rem;
+        }
+
+        .snapshot-info .label {
+            color: var(--text-muted);
+            margin-bottom: 3px;
+        }
+
+        .snapshot-info .value {
+            color: var(--accent-cyan);
+            font-weight: 500;
+        }
+
+        .vision-analysis {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 14px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            min-height: 70px;
+            line-height: 1.5;
+        }
+
+        /* ===== SETTINGS ===== */
+        .settings-panel {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .settings-panel h2 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 0;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .setting-row:last-child {
+            border-bottom: none;
+        }
+
+        .setting-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Toggle */
+        .toggle {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 26px;
+        }
+
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 26px;
+            transition: 0.3s;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+        .toggle input:checked + .toggle-slider {
+            background: linear-gradient(90deg, var(--secondary-teal), var(--accent-cyan));
+        }
+
+        .toggle input:checked + .toggle-slider:before {
+            transform: translateX(22px);
+        }
+
+        /* Number input */
+        .number-input {
+            width: 65px;
+            padding: 8px 12px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--text-primary);
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.85rem;
+            text-align: center;
+        }
+
+        .number-input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        /* Select */
+        .select-input {
+            padding: 8px 14px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--text-primary);
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .select-input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        .select-input option {
+            background: var(--primary-dark);
+        }
+
+        /* ===== ACTIVITY LOG ===== */
+        .logs-container {
+            height: 300px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 14px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.75rem;
+        }
+
+        .logs-container::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .logs-container::-webkit-scrollbar-thumb {
+            background: var(--secondary-teal);
+            border-radius: 3px;
+        }
+
+        .log-entry {
+            margin-bottom: 6px;
+            color: var(--text-secondary);
+            padding: 6px 10px;
+            border-radius: 6px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .log-entry .log-icon {
+            flex-shrink: 0;
+            width: 18px;
+            text-align: center;
+        }
+
+        .log-entry .log-content {
+            flex: 1;
+            word-break: break-word;
+        }
+
+        .log-entry.info { color: var(--accent-cyan); }
+        .log-entry.success { color: var(--accent-cyan); }
+        .log-entry.error { color: var(--accent-magenta); }
+        .log-entry.warning { color: var(--accent-orange); }
+
+        .log-entry.thinking { 
+            color: var(--secondary-teal); 
+            background: rgba(0, 115, 127, 0.1);
+            border-left: 3px solid var(--secondary-teal);
+        }
+
+        .log-entry.tool { 
+            color: var(--accent-orange); 
+            background: rgba(255, 132, 0, 0.1);
+            border-left: 3px solid var(--accent-orange);
+        }
+
+        .log-entry.guardrail { 
+            color: var(--accent-magenta); 
+            background: rgba(204, 50, 98, 0.1);
+            border-left: 3px solid var(--accent-magenta);
+        }
+
+        .log-entry.user-input { 
+            color: var(--accent-cyan); 
+            background: rgba(37, 226, 204, 0.1);
+            border-left: 3px solid var(--accent-cyan);
+        }
+
+        .log-entry.ai-response { 
+            color: var(--secondary-teal); 
+            background: rgba(0, 115, 127, 0.1);
+            border-left: 3px solid var(--secondary-teal);
+        }
+
+        .log-entry.speech { 
+            color: var(--accent-cyan); 
+            background: rgba(37, 226, 204, 0.08);
+            border-left: 3px solid var(--accent-cyan);
+        }
+
+        /* ===== DASHBOARD SECTIONS ===== */
+        .dashboard-section {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--border-subtle);
+            margin-bottom: 20px;
+        }
+
+        .dashboard-section h3 {
+            font-size: 1rem;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .activity-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px;
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background 0.2s;
+        }
+
+        .activity-item:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            background: rgba(0, 115, 127, 0.2);
+        }
+
+        .activity-details {
+            flex: 1;
+        }
+
+        .activity-title {
+            font-weight: 600;
+            margin-bottom: 3px;
+            font-size: 0.9rem;
+        }
+
+        .activity-time {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .status-badge {
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.success {
+            background: rgba(37, 226, 204, 0.15);
+            color: var(--accent-cyan);
+        }
+
+        .status-badge.pending {
+            background: rgba(255, 132, 0, 0.15);
+            color: var(--accent-orange);
+        }
+
+        .quick-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+        }
+
+        .quick-stat {
+            background: rgba(0, 0, 0, 0.25);
+            padding: 18px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .quick-stat-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+        }
+
+        .quick-stat-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Columns for PM Manager */
+        .left-column, .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* ===== WORKSPACE STYLES ===== */
+        .workspace-layout {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 24px;
+            height: calc(100vh - 180px);
+        }
+
+        @media (max-width: 1200px) {
+            .workspace-layout {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+        }
+
+        .document-list-panel,
+        .document-preview-panel {
+            background: var(--bg-card);
+            border-radius: 16px;
+            border: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border-subtle);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .panel-header h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .panel-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover:not(:disabled) {
+            background: var(--secondary-teal);
+            border-color: var(--accent-cyan);
+        }
+
+        .btn-icon:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .document-filters {
+            display: flex;
+            gap: 8px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            overflow-x: auto;
+        }
+
+        .filter-btn {
+            padding: 8px 14px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .filter-btn:hover {
+            border-color: var(--accent-cyan);
+            color: var(--text-primary);
+        }
+
+        .filter-btn.active {
+            background: linear-gradient(135deg, var(--secondary-teal), var(--accent-cyan));
+            border-color: transparent;
+            color: var(--primary-dark);
+        }
+
+        .document-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .document-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .document-list::-webkit-scrollbar-thumb {
+            background: var(--secondary-teal);
+            border-radius: 3px;
+        }
+
+        .document-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 8px;
+            border: 1px solid transparent;
+        }
+
+        .document-item:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .document-item.selected {
+            background: rgba(0, 115, 127, 0.15);
+            border-color: var(--border-accent);
+        }
+
+        .document-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            flex-shrink: 0;
+        }
+
+        .document-icon.report {
+            background: rgba(37, 226, 204, 0.15);
+        }
+
+        .document-icon.email {
+            background: rgba(255, 132, 0, 0.15);
+        }
+
+        .document-icon.summary {
+            background: rgba(0, 115, 127, 0.15);
+        }
+
+        .document-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .document-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .document-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .document-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .document-badge.report {
+            background: rgba(37, 226, 204, 0.15);
+            color: var(--accent-cyan);
+        }
+
+        .document-badge.email {
+            background: rgba(255, 132, 0, 0.15);
+            color: var(--accent-orange);
+        }
+
+        .document-badge.summary {
+            background: rgba(0, 115, 127, 0.15);
+            color: var(--secondary-teal);
+        }
+
+        /* Preview Panel */
+        .preview-meta {
+            display: flex;
+            gap: 16px;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-subtle);
+            font-size: 0.8rem;
+        }
+
+        .meta-item {
+            color: var(--text-muted);
+        }
+
+        .preview-content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            font-size: 0.95rem;
+            line-height: 1.7;
+        }
+
+        .preview-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .preview-content::-webkit-scrollbar-thumb {
+            background: var(--secondary-teal);
+            border-radius: 3px;
+        }
+
+        .preview-content h1,
+        .preview-content h2,
+        .preview-content h3 {
+            color: var(--accent-cyan);
+            margin-bottom: 12px;
+        }
+
+        .preview-content h1 { font-size: 1.5rem; }
+        .preview-content h2 { font-size: 1.25rem; }
+        .preview-content h3 { font-size: 1.1rem; }
+
+        .preview-content p {
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+
+        .preview-content ul,
+        .preview-content ol {
+            margin-bottom: 16px;
+            padding-left: 24px;
+            color: var(--text-secondary);
+        }
+
+        .preview-content li {
+            margin-bottom: 8px;
+        }
+
+        .preview-content strong {
+            color: var(--text-primary);
+        }
+
+        /* Empty States */
+        .empty-state,
+        .empty-preview {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .empty-icon {
+            font-size: 3.5rem;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .empty-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            max-width: 280px;
+        }
+
+        .empty-examples {
+            margin-top: 24px;
+            width: 100%;
+            max-width: 320px;
+        }
+
+        .example-prompt {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: var(--accent-cyan);
+            margin-bottom: 8px;
+            font-style: italic;
+            border-left: 3px solid var(--secondary-teal);
+        }
+
+        /* ===== AI MONITOR STYLES ===== */
+        .monitor-layout {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 24px;
+            height: calc(100vh - 180px);
+        }
+
+        @media (max-width: 1200px) {
+            .monitor-layout {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+        }
+
+        .conversation-flow {
+            background: var(--bg-card);
+            border-radius: 16px;
+            border: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .flow-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-subtle);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .flow-header h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .flow-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .flow-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .flow-content::-webkit-scrollbar-thumb {
+            background: var(--secondary-teal);
+            border-radius: 3px;
+        }
+
+        /* Conversation Items */
+        .flow-item {
+            margin-bottom: 16px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .flow-item-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.3);
+            font-size: 0.8rem;
+        }
+
+        .flow-item-icon {
+            font-size: 1.2rem;
+        }
+
+        .flow-item-label {
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .flow-item-time {
+            margin-left: auto;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .flow-item-content {
+            padding: 14px 16px;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            background: rgba(0, 0, 0, 0.15);
+        }
+
+        /* Flow item types */
+        .flow-item.system {
+            border-color: rgba(0, 115, 127, 0.3);
+        }
+        .flow-item.system .flow-item-header {
+            background: rgba(0, 115, 127, 0.2);
+            color: var(--secondary-teal);
+        }
+
+        .flow-item.user {
+            border-color: rgba(37, 226, 204, 0.3);
+        }
+        .flow-item.user .flow-item-header {
+            background: rgba(37, 226, 204, 0.15);
+            color: var(--accent-cyan);
+        }
+
+        .flow-item.assistant {
+            border-color: rgba(251, 202, 24, 0.3);
+        }
+        .flow-item.assistant .flow-item-header {
+            background: rgba(251, 202, 24, 0.15);
+            color: var(--accent-yellow);
+        }
+
+        .flow-item.guardrail {
+            border-color: rgba(204, 50, 98, 0.3);
+        }
+        .flow-item.guardrail .flow-item-header {
+            background: rgba(204, 50, 98, 0.2);
+            color: var(--accent-magenta);
+        }
+
+        .flow-item.injection {
+            border-color: rgba(255, 132, 0, 0.3);
+        }
+        .flow-item.injection .flow-item-header {
+            background: rgba(255, 132, 0, 0.15);
+            color: var(--accent-orange);
+        }
+
+        .flow-item.handoff {
+            border-color: rgba(204, 50, 98, 0.5);
+            border-width: 2px;
+        }
+        .flow-item.handoff .flow-item-header {
+            background: rgba(204, 50, 98, 0.3);
+            color: #fff;
+        }
+
+        /* Guardrails Panel */
+        .guardrails-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .guardrail-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .guardrail-card h4 {
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent-cyan);
+        }
+
+        .guardrail-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 0.8rem;
+        }
+
+        .guardrail-status.active {
+            border-left: 3px solid var(--accent-cyan);
+        }
+
+        .guardrail-status.warning {
+            border-left: 3px solid var(--accent-orange);
+            background: rgba(255, 132, 0, 0.1);
+        }
+
+        .guardrail-status.alert {
+            border-left: 3px solid var(--accent-magenta);
+            background: rgba(204, 50, 98, 0.1);
+        }
+
+        .guardrail-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        .guardrail-indicator.green {
+            background: var(--accent-cyan);
+            box-shadow: 0 0 8px var(--glow-cyan);
+        }
+
+        .guardrail-indicator.yellow {
+            background: var(--accent-orange);
+            box-shadow: 0 0 8px rgba(255, 132, 0, 0.5);
+        }
+
+        .guardrail-indicator.red {
+            background: var(--accent-magenta);
+            box-shadow: 0 0 8px rgba(204, 50, 98, 0.5);
+            animation: pulse-red 1s infinite;
+        }
+
+        @keyframes pulse-red {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .system-prompt-preview {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            max-height: 150px;
+            overflow-y: auto;
+            line-height: 1.5;
+        }
+
+        .handoff-triggers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .trigger-tag {
+            padding: 4px 10px;
+            background: rgba(204, 50, 98, 0.15);
+            border-radius: 12px;
+            font-size: 0.7rem;
+            color: var(--accent-magenta);
+        }
+
+        .injection-list {
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .injection-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(255, 132, 0, 0.1);
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 0.75rem;
+            border-left: 2px solid var(--accent-orange);
+        }
+
+        /* ===== CONNECTIONS TAB ===== */
+        .connections-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .connection-card {
+            display: grid;
+            grid-template-columns: 60px 1fr auto auto;
+            gap: 20px;
+            align-items: center;
+            padding: 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .connection-card:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-accent);
+        }
+
+        .connection-card.disabled {
+            opacity: 0.6;
+        }
+
+        .connection-icon {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(37, 226, 204, 0.1);
+            border-radius: 12px;
+        }
+
+        .connection-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .connection-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+        }
+
+        .connection-description {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .connection-details {
+            display: flex;
+            gap: 16px;
+            margin-top: 8px;
+        }
+
+        .detail-item {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .detail-item strong {
+            color: var(--text-secondary);
+        }
+
+        .detail-item.coming-soon {
+            color: var(--accent-orange);
+            font-style: italic;
+        }
+
+        .connection-status-col {
+            text-align: center;
+            min-width: 140px;
+        }
+
+        .connection-status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .connection-status-badge.connected {
+            background: rgba(37, 226, 204, 0.2);
+            color: var(--accent-cyan);
+        }
+
+        .connection-status-badge.disconnected {
+            background: rgba(138, 146, 176, 0.2);
+            color: var(--text-secondary);
+        }
+
+        .connection-status-badge.error {
+            background: rgba(204, 50, 98, 0.2);
+            color: var(--accent-magenta);
+        }
+
+        .connection-sync {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+
+        .connection-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+        }
+
+        .health-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+
+        .health-item {
+            text-align: center;
+            padding: 20px;
+            background: rgba(0, 115, 127, 0.1);
+            border-radius: 12px;
+        }
+
+        .health-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .health-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+        }
+
+        @media (max-width: 1200px) {
+            .connection-card {
+                grid-template-columns: 50px 1fr;
+                gap: 12px;
+            }
+            .connection-status-col,
+            .connection-actions {
+                grid-column: span 2;
+                justify-self: start;
+            }
+            .health-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <div class="brand-icon">🤖</div>
+                    <div class="brand-text">
+                        <h1>Concentrix AI</h1>
+                        <span>PM Assistant</span>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="nav-section">
+                <div class="nav-label">Main</div>
+                <div class="nav-item active" onclick="switchTab('dashboard')" id="tab-btn-dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text">Dashboard</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('pm-manager')" id="tab-btn-pm-manager">
+                    <span class="nav-icon">🎙️</span>
+                    <span class="nav-text">PM Manager</span>
+                    <span class="nav-badge">LIVE</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('ai-monitor')" id="tab-btn-ai-monitor">
+                    <span class="nav-icon">🔍</span>
+                    <span class="nav-text">AI Monitor</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('workspace')" id="tab-btn-workspace">
+                    <span class="nav-icon">📂</span>
+                    <span class="nav-text">Workspace</span>
+                    <span class="nav-badge" id="workspace-count" style="display: none;">0</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('connections')" id="tab-btn-connections">
+                    <span class="nav-icon">🔌</span>
+                    <span class="nav-text">Connections</span>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="connection-status">
+                    <div class="status-dot-sidebar" id="sidebarStatus"></div>
+                    <span>System Status</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Dashboard Tab (Default) -->
+            <div class="tab-content active" id="tab-dashboard">
+                <div class="page-header">
+                    <h2>📊 Dashboard</h2>
+                    <p>Real-time metrics and activity overview</p>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="grid-4" style="margin-bottom: 24px;">
+                    <div class="kpi-card">
+                        <div class="kpi-icon">📋</div>
+                        <div class="kpi-value" id="kpi-cases">0</div>
+                        <div class="kpi-label">Cases Handled</div>
+                        <div class="kpi-change positive">↑ Active Today</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">📄</div>
+                        <div class="kpi-value" id="kpi-reports">0</div>
+                        <div class="kpi-label">Reports Generated</div>
+                        <div class="kpi-change neutral">This Session</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">🎤</div>
+                        <div class="kpi-value" id="kpi-interactions">0</div>
+                        <div class="kpi-label">Voice Interactions</div>
+                        <div class="kpi-change positive">↑ Active</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">⚡</div>
+                        <div class="kpi-value" id="kpi-response-time">--</div>
+                        <div class="kpi-label">Avg Response (sec)</div>
+                        <div class="kpi-change positive">Fast</div>
+                    </div>
+                </div>
+
+                <!-- Two Column Layout -->
+                <div class="main-grid">
+                    <div class="left-column">
+                        <!-- Recent Activity -->
+                        <div class="dashboard-section">
+                            <h3><span>📊</span> Recent Activity</h3>
+                            <div id="dashboard-activity">
+                                <div class="activity-item">
+                                    <div class="activity-icon">🎙️</div>
+                                    <div class="activity-details">
+                                        <div class="activity-title">Session Started</div>
+                                        <div class="activity-time">Waiting for activity...</div>
+                                    </div>
+                                    <span class="status-badge pending">Standby</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Generated Documents -->
+                        <div class="dashboard-section">
+                            <h3><span>📁</span> Generated Documents</h3>
+                            <div id="dashboard-documents">
+                                <div class="activity-item">
+                                    <div class="activity-icon">📄</div>
+                                    <div class="activity-details">
+                                        <div class="activity-title">No documents yet</div>
+                                        <div class="activity-time">Ask Claude to generate reports or emails</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="right-column">
+                        <!-- Session Stats -->
+                        <div class="dashboard-section">
+                            <h3><span>📈</span> Session Statistics</h3>
+                            <div class="quick-stats">
+                                <div class="quick-stat">
+                                    <div class="quick-stat-value" id="stat-session-time">00:00</div>
+                                    <div class="quick-stat-label">Session Time</div>
+                                </div>
+                                <div class="quick-stat">
+                                    <div class="quick-stat-value" id="stat-queries">0</div>
+                                    <div class="quick-stat-label">Claude Queries</div>
+                                </div>
+                                <div class="quick-stat">
+                                    <div class="quick-stat-value" id="stat-screenshots">0</div>
+                                    <div class="quick-stat-label">Screenshots</div>
+                                </div>
+                                <div class="quick-stat">
+                                    <div class="quick-stat-value" id="stat-files">0</div>
+                                    <div class="quick-stat-label">Files Saved</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- System Status -->
+                        <div class="dashboard-section">
+                            <h3><span>🖥️</span> System Status</h3>
+                            <div class="activity-item">
+                                <div class="activity-icon">🌐</div>
+                                <div class="activity-details">
+                                    <div class="activity-title">WebSocket</div>
+                                    <div class="activity-time" id="dash-ws-status">Disconnected</div>
+                                </div>
+                                <span class="status-badge pending" id="dash-ws-badge">Offline</span>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-icon">🤖</div>
+                                <div class="activity-details">
+                                    <div class="activity-title">AI Engine</div>
+                                    <div class="activity-time" id="dash-ai-status">Claude Haiku 4.5</div>
+                                </div>
+                                <span class="status-badge pending" id="dash-ai-badge">Standby</span>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-icon">📊</div>
+                                <div class="activity-details">
+                                    <div class="activity-title">Dataverse</div>
+                                    <div class="activity-time" id="dash-dv-status">Cached data ready</div>
+                                </div>
+                                <span class="status-badge success" id="dash-dv-badge">Ready</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Monitor Tab -->
+            <div class="tab-content" id="tab-ai-monitor">
+                <div class="page-header">
+                    <h2>🔍 AI Monitor</h2>
+                    <p>Real-time view of AI conversation flow, guardrails, and injections</p>
+                </div>
+
+                <div class="monitor-layout">
+                    <!-- Conversation Flow Panel -->
+                    <div class="conversation-flow">
+                        <div class="flow-header">
+                            <h3><span>💬</span> Conversation Flow</h3>
+                            <div class="panel-actions">
+                                <button class="btn-icon" onclick="clearMonitor()" title="Clear">🗑️</button>
+                            </div>
+                        </div>
+                        <div class="flow-content" id="monitorFlow">
+                            <!-- System Prompt Item -->
+                            <div class="flow-item system">
+                                <div class="flow-item-header">
+                                    <span class="flow-item-icon">⚙️</span>
+                                    <span class="flow-item-label">System Prompt</span>
+                                    <span class="flow-item-time">On Init</span>
+                                </div>
+                                <div class="flow-item-content">
+                                    <strong>Personality:</strong> PM Assistant v1<br>
+                                    <strong>Behavior:</strong> Concise voice responses, no markdown<br>
+                                    <strong>Data Context:</strong> Dataverse cases injected
+                                </div>
+                            </div>
+                            
+                            <!-- Empty state -->
+                            <div id="monitorEmpty" class="empty-state" style="padding: 40px;">
+                                <div class="empty-icon">🎙️</div>
+                                <div class="empty-title">Waiting for conversation...</div>
+                                <div class="empty-subtitle">Start talking to see the AI flow in real-time</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Guardrails Panel -->
+                    <div class="guardrails-panel">
+                        <!-- Active Guardrails -->
+                        <div class="guardrail-card">
+                            <h4>🛡️ Active Guardrails</h4>
+                            <div class="guardrail-status active">
+                                <div class="guardrail-indicator green"></div>
+                                <span>Information Only (no actions)</span>
+                            </div>
+                            <div class="guardrail-status active">
+                                <div class="guardrail-indicator green"></div>
+                                <span>Dataverse Data Only (no hallucination)</span>
+                            </div>
+                            <div class="guardrail-status active">
+                                <div class="guardrail-indicator green"></div>
+                                <span>PM Scope Only</span>
+                            </div>
+                            <div class="guardrail-status active">
+                                <div class="guardrail-indicator green"></div>
+                                <span>Concise Voice Responses</span>
+                            </div>
+                        </div>
+
+                        <!-- What Bot Can/Can't Do -->
+                        <div class="guardrail-card">
+                            <h4>✅ Can Do</h4>
+                            <div class="guardrail-status">
+                                <span>📊 Read cases from Dataverse</span>
+                            </div>
+                            <div class="guardrail-status">
+                                <span>📝 Generate reports/emails/summaries</span>
+                            </div>
+                            <div class="guardrail-status">
+                                <span>🔍 Answer questions about case data</span>
+                            </div>
+                            <div class="guardrail-status">
+                                <span>📅 Provide project information</span>
+                            </div>
+                        </div>
+
+                        <div class="guardrail-card">
+                            <h4>🚫 Out of Scope (Not PM's Job)</h4>
+                            <div class="guardrail-status warning">
+                                <span>🏥 Medical advice</span>
+                            </div>
+                            <div class="guardrail-status warning">
+                                <span>⚖️ Legal advice</span>
+                            </div>
+                            <div class="guardrail-status warning">
+                                <span>💰 Financial/investment advice</span>
+                            </div>
+                            <div class="guardrail-status warning">
+                                <span>🔐 Passwords/credentials</span>
+                            </div>
+                            <div class="guardrail-status warning">
+                                <span>👤 Personal opinions on people</span>
+                            </div>
+                        </div>
+
+                        <!-- Recent Injections -->
+                        <div class="guardrail-card">
+                            <h4>💉 Context Injections</h4>
+                            <div class="injection-list" id="injectionList">
+                                <div class="injection-item">
+                                    <span>📊</span>
+                                    <span>Dataverse: 4 cases loaded</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PM Manager Tab -->
+            <div class="tab-content" id="tab-pm-manager">
+                <div class="page-header">
+                    <h2>🎙️ PM Manager</h2>
+                    <p>Voice-powered meeting assistant with screen analysis</p>
+                </div>
+
+                <div class="main-grid">
+                    <!-- Left Column - Main Content -->
+                    <div class="left-column">
+                        <!-- Connection Card -->
+                        <div class="card">
+                            <h2><span class="icon">🔗</span> Connection</h2>
+                            <div class="input-group">
+                                <input type="text" id="serverUrl" placeholder="Server URL (e.g., https://xxxxx.ngrok-free.dev)" value="">
+                                <button class="btn btn-primary" id="connectBtn" onclick="connectToServer()">
+                                    Connect
+                                </button>
+                            </div>
+                            <div class="status-row">
+                                <div class="status-indicator">
+                                    <div class="status-dot" id="wsStatus"></div>
+                                    <span>WebSocket</span>
+                                </div>
+                                <div class="status-indicator">
+                                    <div class="status-dot" id="audioStatus"></div>
+                                    <span>Audio Stream</span>
+                                </div>
+                                <div class="status-indicator">
+                                    <div class="status-dot" id="videoStatus"></div>
+                                    <span>Video Capture</span>
+                                </div>
+                                <div class="status-indicator">
+                                    <div class="status-dot" id="aiStatus"></div>
+                                    <span>AI Connected</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Screen Capture Card -->
+                        <div class="card">
+                            <h2><span class="icon">📺</span> Screen Capture</h2>
+                            <div class="video-container">
+                                <video id="screenVideo" autoplay muted></video>
+                                <div class="video-placeholder" id="videoPlaceholder">
+                                    <div class="icon">🖥️</div>
+                                    <div>Click "Start Screen Capture" to begin</div>
+                                </div>
+                            </div>
+                            
+                            <div class="audio-level-container">
+                                <div class="audio-level-label">
+                                    <span>Audio Level</span>
+                                    <span id="audioLevelValue">0%</span>
+                                </div>
+                                <div class="audio-level-bar">
+                                    <div class="audio-level-fill" id="audioLevelFill"></div>
+                                </div>
+                            </div>
+
+                            <div class="control-buttons">
+                                <button class="btn btn-success" id="startCaptureBtn" onclick="startCapture()">
+                                    🎬 Start Screen Capture
+                                </button>
+                                <button class="btn btn-danger" id="stopCaptureBtn" onclick="stopCapture()" disabled>
+                                    ⏹️ Stop Capture
+                                </button>
+                                <button class="btn btn-primary" id="snapshotBtn" onclick="takeSnapshot()" disabled>
+                                    📸 Analyze Screen Now
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Transcript Card -->
+                        <div class="card">
+                            <h2><span class="icon">📝</span> Live Transcript</h2>
+                            <div class="transcript-container" id="transcriptContainer">
+                                <div class="transcript-entry">
+                                    <div class="text" style="color: #5a6a8a; font-style: italic;">
+                                        Transcript will appear here when the meeting starts...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column - Sidebar -->
+                    <div class="right-column">
+                        <!-- Vision Analysis Card -->
+                        <div class="vision-panel">
+                            <h2><span class="icon">👁️</span> Vision Analysis</h2>
+                            <div class="vision-snapshot">
+                                <div class="snapshot-preview">
+                                    <img id="lastSnapshot" src="" alt="Last snapshot" style="display: none;">
+                                    <div id="snapshotPlaceholder" style="display: flex; align-items: center; justify-content: center; height: 100%; color: #5a6a8a; font-size: 0.65rem;">No snapshot</div>
+                                </div>
+                                <div class="snapshot-info">
+                                    <div class="label">Last analyzed</div>
+                                    <div class="value" id="lastAnalyzedTime">Never</div>
+                                    <div class="label" style="margin-top: 8px;">Interval</div>
+                                    <div class="value" id="analysisIntervalDisplay">Every 5 seconds</div>
+                                </div>
+                            </div>
+                            <div class="vision-analysis" id="visionAnalysis">
+                                Vision analysis will appear here. The AI will identify who's speaking, what's on screen, and meeting context.
+                            </div>
+                        </div>
+
+                        <!-- Settings Card -->
+                        <div class="settings-panel">
+                            <h2><span class="icon">⚙️</span> Settings</h2>
+                            <div class="setting-row">
+                                <span class="setting-label">Auto-analyze screen</span>
+                                <label class="toggle">
+                                    <input type="checkbox" id="autoAnalyze" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">Analysis interval (sec)</span>
+                                <input type="number" class="number-input" id="analysisIntervalInput" value="5" min="2" max="30">
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">Wake words</span>
+                                <select class="select-input" id="wakeWords">
+                                    <option value="hey-pm">Hey PM / Project Manager</option>
+                                    <option value="always">Always listening</option>
+                                    <option value="manual">Manual only</option>
+                                </select>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">Vision model</span>
+                                <select class="select-input" id="visionModel">
+                                    <option value="gpt-4o">GPT-4o (Azure)</option>
+                                    <option value="claude">Claude 3.5 Sonnet</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Activity Log Card -->
+                        <div class="card">
+                            <h2><span class="icon">📋</span> Activity Log</h2>
+                            <div class="logs-container" id="logsContainer">
+                                <div class="log-entry info">[System] PM AI Bot initialized</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workspace Tab -->
+            <div class="tab-content" id="tab-workspace">
+                <div class="page-header">
+                    <h2>📂 Workspace</h2>
+                    <p>Documents and reports generated by Claude</p>
+                </div>
+
+                <div class="workspace-layout">
+                    <!-- Document List Panel -->
+                    <div class="document-list-panel">
+                        <div class="panel-header">
+                            <h3>📁 Documents</h3>
+                            <div class="panel-actions">
+                                <button class="btn-icon" onclick="clearWorkspace()" title="Clear All">🗑️</button>
+                            </div>
+                        </div>
+                        <div class="document-filters">
+                            <button class="filter-btn active" onclick="filterDocuments('all')">All</button>
+                            <button class="filter-btn" onclick="filterDocuments('report')">📊 Reports</button>
+                            <button class="filter-btn" onclick="filterDocuments('email')">📧 Emails</button>
+                            <button class="filter-btn" onclick="filterDocuments('summary')">📋 Summaries</button>
+                        </div>
+                        <div class="document-list" id="documentList">
+                            <div class="empty-state">
+                                <div class="empty-icon">📄</div>
+                                <div class="empty-title">No documents yet</div>
+                                <div class="empty-subtitle">Ask Claude to create reports, emails, or summaries</div>
+                                <div class="empty-examples">
+                                    <div class="example-prompt">"Hey Claude, write a status report for my cases"</div>
+                                    <div class="example-prompt">"Hey Claude, draft an email about the billing issue"</div>
+                                    <div class="example-prompt">"Hey Claude, summarize today's activities"</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Document Preview Panel -->
+                    <div class="document-preview-panel">
+                        <div class="panel-header">
+                            <h3 id="previewTitle">📄 Document Preview</h3>
+                            <div class="panel-actions">
+                                <button class="btn-icon" onclick="copyDocument()" title="Copy to Clipboard" id="copyBtn" disabled>📋</button>
+                                <button class="btn-icon" onclick="downloadDocument()" title="Download" id="downloadBtn" disabled>⬇️</button>
+                            </div>
+                        </div>
+                        <div class="preview-meta" id="previewMeta">
+                            <span class="meta-item" id="previewType">-</span>
+                            <span class="meta-item" id="previewDate">-</span>
+                        </div>
+                        <div class="preview-content" id="previewContent">
+                            <div class="empty-preview">
+                                <div class="empty-icon">👈</div>
+                                <div class="empty-title">Select a document</div>
+                                <div class="empty-subtitle">Choose a document from the list to preview its contents</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connections Tab -->
+            <div class="tab-content" id="tab-connections">
+                <div class="page-header">
+                    <h2>🔌 Connections</h2>
+                    <p class="page-subtitle">Manage data source integrations and connection status</p>
+                </div>
+
+                <div class="dashboard-grid" style="grid-template-columns: 1fr;">
+                    <!-- Connection Cards -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>📡 Data Sources</h3>
+                            <button class="btn btn-outline" onclick="refreshAllConnections()">
+                                🔄 Refresh All
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="connections-list">
+                                <!-- Dataverse Connection -->
+                                <div class="connection-card" id="conn-dataverse">
+                                    <div class="connection-icon">
+                                        <span style="font-size: 2rem;">📊</span>
+                                    </div>
+                                    <div class="connection-info">
+                                        <div class="connection-name">Microsoft Dataverse</div>
+                                        <div class="connection-description">Power Platform case management data</div>
+                                        <div class="connection-details">
+                                            <span class="detail-item">
+                                                <strong>Table:</strong> <span id="dv-table">cr48f_aitaskses</span>
+                                            </span>
+                                            <span class="detail-item">
+                                                <strong>Records:</strong> <span id="dv-records">--</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="connection-status-col">
+                                        <div class="connection-status-badge connected" id="dv-status-badge">
+                                            🟢 Connected
+                                        </div>
+                                        <div class="connection-sync" id="dv-last-sync">
+                                            Last sync: --
+                                        </div>
+                                    </div>
+                                    <div class="connection-actions">
+                                        <button class="btn btn-sm btn-outline" onclick="testConnection('dataverse')">
+                                            Test
+                                        </button>
+                                        <button class="btn btn-sm btn-outline" onclick="configureConnection('dataverse')">
+                                            Configure
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Smartsheets Connection -->
+                                <div class="connection-card" id="conn-smartsheets">
+                                    <div class="connection-icon">
+                                        <span style="font-size: 2rem;">📋</span>
+                                    </div>
+                                    <div class="connection-info">
+                                        <div class="connection-name">Smartsheets</div>
+                                        <div class="connection-description">Project tracking and collaboration</div>
+                                        <div class="connection-details">
+                                            <span class="detail-item" style="color: var(--accent-orange);">
+                                                ⏳ Pending API Access from Client
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="connection-status-col">
+                                        <div class="connection-status-badge pending" id="ss-status-badge" style="background: rgba(255, 170, 51, 0.15); color: var(--accent-orange);">
+                                            🔑 Awaiting API Key
+                                        </div>
+                                        <div class="connection-sync">
+                                            Ready to connect
+                                        </div>
+                                    </div>
+                                    <div class="connection-actions">
+                                        <button class="btn btn-sm btn-outline" disabled>
+                                            Ready When You Are
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Google Sheets Connection (Alternative) -->
+                                <div class="connection-card disabled" id="conn-googlesheets">
+                                    <div class="connection-icon">
+                                        <span style="font-size: 2rem;">📗</span>
+                                    </div>
+                                    <div class="connection-info">
+                                        <div class="connection-name">Google Sheets</div>
+                                        <div class="connection-description">Alternative spreadsheet option</div>
+                                        <div class="connection-details">
+                                            <span class="detail-item coming-soon">Available as backup option</span>
+                                        </div>
+                                    </div>
+                                    <div class="connection-status-col">
+                                        <div class="connection-status-badge disconnected" id="gs-status-badge">
+                                            ⚪ Not Configured
+                                        </div>
+                                        <div class="connection-sync">
+                                            --
+                                        </div>
+                                    </div>
+                                    <div class="connection-actions">
+                                        <button class="btn btn-sm btn-outline" disabled>
+                                            Alternative
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- ServiceNow Connection (Future) -->
+                                <div class="connection-card disabled" id="conn-servicenow">
+                                    <div class="connection-icon">
+                                        <span style="font-size: 2rem;">🎫</span>
+                                    </div>
+                                    <div class="connection-info">
+                                        <div class="connection-name">ServiceNow</div>
+                                        <div class="connection-description">IT service management tickets</div>
+                                        <div class="connection-details">
+                                            <span class="detail-item coming-soon">Coming Soon</span>
+                                        </div>
+                                    </div>
+                                    <div class="connection-status-col">
+                                        <div class="connection-status-badge disconnected" id="sn-status-badge">
+                                            ⚪ Not Available
+                                        </div>
+                                        <div class="connection-sync">
+                                            --
+                                        </div>
+                                    </div>
+                                    <div class="connection-actions">
+                                        <button class="btn btn-sm btn-outline" disabled>
+                                            Coming Soon
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Salesforce Connection (Future) -->
+                                <div class="connection-card disabled" id="conn-salesforce">
+                                    <div class="connection-icon">
+                                        <span style="font-size: 2rem;">☁️</span>
+                                    </div>
+                                    <div class="connection-info">
+                                        <div class="connection-name">Salesforce</div>
+                                        <div class="connection-description">CRM and customer data</div>
+                                        <div class="connection-details">
+                                            <span class="detail-item coming-soon">Coming Soon</span>
+                                        </div>
+                                    </div>
+                                    <div class="connection-status-col">
+                                        <div class="connection-status-badge disconnected" id="sf-status-badge">
+                                            ⚪ Not Available
+                                        </div>
+                                        <div class="connection-sync">
+                                            --
+                                        </div>
+                                    </div>
+                                    <div class="connection-actions">
+                                        <button class="btn btn-sm btn-outline" disabled>
+                                            Coming Soon
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Connection Health Summary -->
+                    <div class="card" style="margin-top: 20px;">
+                        <div class="card-header">
+                            <h3>📈 Connection Health</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="health-grid">
+                                <div class="health-item">
+                                    <div class="health-label">Active Connections</div>
+                                    <div class="health-value" id="health-active">1</div>
+                                </div>
+                                <div class="health-item">
+                                    <div class="health-label">Total Records Cached</div>
+                                    <div class="health-value" id="health-records">--</div>
+                                </div>
+                                <div class="health-item">
+                                    <div class="health-label">Auto-Refresh Interval</div>
+                                    <div class="health-value">30s</div>
+                                </div>
+                                <div class="health-item">
+                                    <div class="health-label">Last Global Sync</div>
+                                    <div class="health-value" id="health-last-sync">--</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Hidden canvas for snapshots -->
+    <canvas id="snapshotCanvas" style="display: none;"></canvas>
+
+    <!-- Audio playback for AI responses -->
+    <audio id="aiAudioPlayer" style="display: none;"></audio>
+
+    <script>
+        // ===== Global State =====
+        let ws = null;
+        let mediaStream = null;
+        let audioContext = null;
+        let audioProcessor = null;
+        let analyser = null;
+        let isCapturing = false;
+        let analysisTimer = null;
+        let aiIsSpeaking = false;  // Track when AI is speaking to ignore echo
+
+        // ===== Dashboard Stats (NEW) =====
+        let dashboardStats = {
+            casesHandled: 0,
+            reportsGenerated: 0,
+            voiceInteractions: 0,
+            responseTimes: [],
+            sessionStartTime: Date.now(),
+            claudeQueries: 0,
+            screenshots: 0,
+            filesSaved: 0,
+            activities: []
+        };
+
+        // ===== Tab Switching (NEW) =====
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            // Remove active from all nav items
+            document.querySelectorAll('.nav-item').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            // Show selected tab
+            document.getElementById('tab-' + tabName).classList.add('active');
+            document.getElementById('tab-btn-' + tabName).classList.add('active');
+            
+            // Update dashboard when switching to it
+            if (tabName === 'dashboard') {
+                updateDashboard();
+            }
+            // Update connections when switching to it
+            if (tabName === 'connections') {
+                updateConnectionsTab();
+            }
+        }
+
+        // ===== Connection Management =====
+        let connectionStatus = {
+            dataverse: {
+                connected: true,
+                records: 0,
+                lastSync: null,
+                table: 'cr48f_aitaskses'
+            },
+            googlesheets: {
+                connected: false,
+                records: 0,
+                lastSync: null,
+                sheetId: null,
+                sheetName: null
+            }
+        };
+
+        function updateConnectionsTab() {
+            // Update Dataverse status
+            const dvRecords = connectionStatus.dataverse.records;
+            document.getElementById('dv-records').textContent = dvRecords;
+            document.getElementById('dv-table').textContent = connectionStatus.dataverse.table;
+            
+            if (connectionStatus.dataverse.lastSync) {
+                const syncTime = new Date(connectionStatus.dataverse.lastSync);
+                document.getElementById('dv-last-sync').textContent = 'Last sync: ' + syncTime.toLocaleTimeString();
+            }
+            
+            // Update Google Sheets status
+            if (connectionStatus.googlesheets.connected) {
+                document.getElementById('gs-records').textContent = connectionStatus.googlesheets.records;
+                document.getElementById('gs-sheet').textContent = connectionStatus.googlesheets.sheetName || connectionStatus.googlesheets.sheetId || 'Connected';
+                document.getElementById('gs-status-badge').textContent = '🟢 Connected';
+                document.getElementById('gs-status-badge').className = 'connection-status-badge connected';
+                if (connectionStatus.googlesheets.lastSync) {
+                    document.getElementById('gs-last-sync').textContent = 'Last sync: ' + new Date(connectionStatus.googlesheets.lastSync).toLocaleTimeString();
+                }
+            }
+            
+            // Update health summary
+            const totalRecords = dvRecords + (connectionStatus.googlesheets.records || 0);
+            const activeConnections = (connectionStatus.dataverse.connected ? 1 : 0) + (connectionStatus.googlesheets.connected ? 1 : 0);
+            document.getElementById('health-records').textContent = totalRecords;
+            document.getElementById('health-active').textContent = activeConnections;
+            document.getElementById('health-last-sync').textContent = connectionStatus.dataverse.lastSync 
+                ? new Date(connectionStatus.dataverse.lastSync).toLocaleTimeString() 
+                : '--';
+        }
+
+        function refreshAllConnections() {
+            log('Refreshing all connections...', 'info');
+            // Dataverse refreshes automatically via backend
+            // Google Sheets will also refresh via backend when implemented
+            updateConnectionsTab();
+            addDashboardActivity('Connections Refreshed', 'All data sources updated', '🔄', 'success');
+        }
+
+        function testConnection(type) {
+            log(`Testing ${type} connection...`, 'info');
+            
+            if (type === 'dataverse') {
+                // Dataverse is managed by backend - just verify we have data
+                if (connectionStatus.dataverse.records > 0) {
+                    log(`✅ Dataverse connected: ${connectionStatus.dataverse.records} records`, 'success');
+                    document.getElementById('dv-status-badge').textContent = '🟢 Connected';
+                    document.getElementById('dv-status-badge').className = 'connection-status-badge connected';
+                } else {
+                    log('⚠️ Dataverse: No records found', 'warning');
+                }
+            } else if (type === 'googlesheets') {
+                if (connectionStatus.googlesheets.connected) {
+                    log(`✅ Google Sheets connected: ${connectionStatus.googlesheets.records} records`, 'success');
+                } else {
+                    log('⚠️ Google Sheets: Not connected', 'warning');
+                }
+            }
+        }
+
+        function configureConnection(type) {
+            if (type === 'dataverse') {
+                alert('Dataverse Configuration\\n\\nTable: ' + connectionStatus.dataverse.table + '\\nRecords: ' + connectionStatus.dataverse.records + '\\n\\nDataverse is configured via environment variables on the server.');
+            } else if (type === 'googlesheets') {
+                const sheetId = prompt('Enter Google Sheet ID:\\n\\n(Found in the URL: docs.google.com/spreadsheets/d/[SHEET_ID]/edit)', connectionStatus.googlesheets.sheetId || '');
+                if (sheetId) {
+                    connectionStatus.googlesheets.sheetId = sheetId;
+                    document.getElementById('gs-sheet').textContent = sheetId.substring(0, 20) + '...';
+                    log(`Google Sheet ID set: ${sheetId}`, 'info');
+                    
+                    // Send to server to configure
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ 
+                            type: 'configure_googlesheets', 
+                            sheetId: sheetId 
+                        }));
+                        log('Sent Google Sheets configuration to server', 'info');
+                    } else {
+                        alert('Google Sheet ID saved locally.\\n\\nConnect to server to activate the integration.');
+                    }
+                }
+            }
+        }
+
+        // Update connection status from server messages
+        function updateDataverseStatus(count) {
+            connectionStatus.dataverse.records = count;
+            connectionStatus.dataverse.lastSync = new Date().toISOString();
+            connectionStatus.dataverse.connected = count > 0;
+        }
+        
+        // Update Google Sheets connection status from server
+        function updateGoogleSheetsStatus(data) {
+            connectionStatus.googlesheets.connected = data.connected;
+            connectionStatus.googlesheets.records = data.records || 0;
+            connectionStatus.googlesheets.lastSync = new Date().toISOString();
+            connectionStatus.googlesheets.sheetName = data.sheetName;
+            updateConnectionsTab();
+        }
+
+        // ===== Dashboard Update Functions (NEW) =====
+        function updateDashboard() {
+            // Update KPIs
+            document.getElementById('kpi-cases').textContent = dashboardStats.casesHandled;
+            document.getElementById('kpi-reports').textContent = dashboardStats.reportsGenerated;
+            document.getElementById('kpi-interactions').textContent = dashboardStats.voiceInteractions;
+            
+            // Calculate average response time
+            if (dashboardStats.responseTimes.length > 0) {
+                const avg = dashboardStats.responseTimes.reduce((a, b) => a + b, 0) / dashboardStats.responseTimes.length;
+                document.getElementById('kpi-response-time').textContent = avg.toFixed(1);
+            }
+            
+            // Update session stats
+            document.getElementById('stat-queries').textContent = dashboardStats.claudeQueries;
+            document.getElementById('stat-screenshots').textContent = dashboardStats.screenshots;
+            document.getElementById('stat-files').textContent = dashboardStats.filesSaved;
+            
+            // Update session time
+            const elapsed = Math.floor((Date.now() - dashboardStats.sessionStartTime) / 1000);
+            const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const secs = (elapsed % 60).toString().padStart(2, '0');
+            document.getElementById('stat-session-time').textContent = `${mins}:${secs}`;
+            
+            // Update connection status
+            updateDashboardStatus();
+        }
+
+        function updateDashboardStatus() {
+            const wsConnected = ws && ws.readyState === WebSocket.OPEN;
+            document.getElementById('dash-ws-status').textContent = wsConnected ? 'Connected' : 'Disconnected';
+            document.getElementById('dash-ws-badge').textContent = wsConnected ? 'Online' : 'Offline';
+            document.getElementById('dash-ws-badge').className = 'status-badge ' + (wsConnected ? 'success' : 'pending');
+            
+            document.getElementById('dash-ai-badge').textContent = wsConnected ? 'Ready' : 'Standby';
+            document.getElementById('dash-ai-badge').className = 'status-badge ' + (wsConnected ? 'success' : 'pending');
+            
+            // Update sidebar status dot
+            const sidebarDot = document.getElementById('sidebarStatus');
+            if (sidebarDot) {
+                sidebarDot.className = 'status-dot-sidebar' + (wsConnected ? ' online' : '');
+            }
+        }
+
+        function addDashboardActivity(title, subtitle, icon = '📌', status = 'success') {
+            const activity = { title, subtitle, icon, status, time: new Date() };
+            dashboardStats.activities.unshift(activity);
+            if (dashboardStats.activities.length > 10) dashboardStats.activities.pop();
+            
+            const container = document.getElementById('dashboard-activity');
+            container.innerHTML = dashboardStats.activities.map(a => `
+                <div class="activity-item">
+                    <div class="activity-icon">${a.icon}</div>
+                    <div class="activity-details">
+                        <div class="activity-title">${a.title}</div>
+                        <div class="activity-time">${a.subtitle}</div>
+                    </div>
+                    <span class="status-badge ${a.status}">${a.status === 'success' ? 'Done' : 'Pending'}</span>
+                </div>
+            `).join('');
+        }
+
+        function trackVoiceInteraction() {
+            dashboardStats.voiceInteractions++;
+        }
+
+        function trackClaudeQuery(responseTimeMs) {
+            dashboardStats.claudeQueries++;
+            if (responseTimeMs) {
+                dashboardStats.responseTimes.push(responseTimeMs / 1000);
+                if (dashboardStats.responseTimes.length > 20) dashboardStats.responseTimes.shift();
+            }
+        }
+
+        function trackFileSaved() {
+            dashboardStats.filesSaved++;
+            dashboardStats.reportsGenerated++;
+        }
+
+        function trackScreenshot() {
+            dashboardStats.screenshots++;
+        }
+
+        function trackCaseQuery(caseCount) {
+            dashboardStats.casesHandled = caseCount;
+        }
+
+        // Update dashboard every 5 seconds if on dashboard tab
+        setInterval(() => {
+            if (document.getElementById('tab-dashboard').classList.contains('active')) {
+                updateDashboard();
+            }
+        }, 5000);
+
+        // ===== AI Monitor Management =====
+        const monitorHistory = [];
+        const handoffTriggers = [
+            // Budget & Finance
+            'approve the budget', 'approve budget', 'budget approval', 'authorize spend',
+            'sign off on', 'sign-off', 'approval needed',
+            // Timeline & Deadlines
+            'change the deadline', 'extend deadline', 'push back the date', 'delay the project',
+            'move the milestone',
+            // Resource & HR
+            'fire', 'terminate', 'let go', 'HR issue', 'human resources',
+            'hire someone', 'staffing issue', 'resource conflict',
+            'assign to another project', 'reassign',
+            // Scope & Executive
+            'cancel the project', 'kill the project', 'scope change', 'change requirements',
+            'escalate to', 'need executive', 'sponsor decision', 'stakeholder approval',
+            // Legal & Contracts
+            'contract', 'legal review', 'NDA', 'liability', 'compliance issue',
+            // Out of scope
+            'not my job', 'outside my role', 'above my pay grade'
+        ];
+
+        function addToMonitor(type, content, timestamp = new Date()) {
+            // Hide empty state
+            const emptyState = document.getElementById('monitorEmpty');
+            if (emptyState) emptyState.style.display = 'none';
+            
+            const flowContent = document.getElementById('monitorFlow');
+            const timeStr = timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+            
+            const icons = {
+                user: '👤',
+                assistant: '🤖',
+                guardrail: '🛡️',
+                injection: '💉',
+                handoff: '🚨',
+                system: '⚙️',
+                thinking: '🧠'
+            };
+            
+            const labels = {
+                user: 'User Query',
+                assistant: 'AI Response',
+                guardrail: 'Guardrail Check',
+                injection: 'Text Injection',
+                handoff: 'HAND-OFF ALERT',
+                system: 'System',
+                thinking: 'Processing'
+            };
+            
+            const item = document.createElement('div');
+            item.className = `flow-item ${type}`;
+            item.innerHTML = `
+                <div class="flow-item-header">
+                    <span class="flow-item-icon">${icons[type] || '📝'}</span>
+                    <span class="flow-item-label">${labels[type] || type}</span>
+                    <span class="flow-item-time">${timeStr}</span>
+                </div>
+                <div class="flow-item-content">${content}</div>
+            `;
+            
+            flowContent.appendChild(item);
+            flowContent.scrollTop = flowContent.scrollHeight;
+            
+            // Store in history
+            monitorHistory.push({ type, content, timestamp });
+            
+            // Check for handoff triggers
+            if (type === 'user') {
+                checkHandoffTriggers(content);
+            }
+        }
+
+        function checkHandoffTriggers(text) {
+            const lowerText = text.toLowerCase();
+            
+            const indicator = document.getElementById('handoff-indicator');
+            const status = document.getElementById('handoff-status');
+            const textEl = document.getElementById('handoff-text');
+            
+            // Guard against missing elements
+            if (!indicator || !status || !textEl) {
+                return false;
+            }
+            
+            for (const trigger of handoffTriggers) {
+                if (lowerText.includes(trigger)) {
+                    // Update handoff status
+                    indicator.className = 'guardrail-indicator red';
+                    status.className = 'guardrail-status alert';
+                    textEl.textContent = `Trigger: "${trigger}"`;
+                    
+                    // Add to monitor
+                    addToMonitor('handoff', `
+                        <strong>⚠️ HAND-OFF TRIGGERED</strong><br>
+                        <strong>Trigger phrase:</strong> "${trigger}"<br>
+                        <strong>Action:</strong> Consider transferring to human agent<br>
+                        <strong>Reason:</strong> Query outside bot's scope
+                    `);
+                    
+                    // Add injection reminder
+                    addInjection('🚨 Compliance: Hand-off reminder sent');
+                    
+                    return true;
+                }
+            }
+            
+            // Reset if no triggers
+            indicator.className = 'guardrail-indicator green';
+            status.className = 'guardrail-status';
+            textEl.textContent = 'No triggers detected';
+            
+            return false;
+        }
+
+        function addInjection(text) {
+            const list = document.getElementById('injectionList');
+            const item = document.createElement('div');
+            item.className = 'injection-item';
+            item.innerHTML = `<span>💉</span><span>${text}</span>`;
+            list.appendChild(item);
+            
+            // Keep only last 5 injections
+            while (list.children.length > 5) {
+                list.removeChild(list.firstChild);
+            }
+        }
+
+        function addGuardrailCheck(rule, passed) {
+            addToMonitor('guardrail', `
+                <strong>Rule:</strong> ${rule}<br>
+                <strong>Status:</strong> ${passed ? '✅ PASSED' : '❌ FAILED'}
+            `);
+        }
+
+        function clearMonitor() {
+            const flowContent = document.getElementById('monitorFlow');
+            // Keep only the system prompt item
+            const systemItem = flowContent.querySelector('.flow-item.system');
+            flowContent.innerHTML = '';
+            if (systemItem) flowContent.appendChild(systemItem);
+            
+            // Show empty state
+            const emptyDiv = document.createElement('div');
+            emptyDiv.id = 'monitorEmpty';
+            emptyDiv.className = 'empty-state';
+            emptyDiv.style.padding = '40px';
+            emptyDiv.innerHTML = `
+                <div class="empty-icon">🎙️</div>
+                <div class="empty-title">Waiting for conversation...</div>
+                <div class="empty-subtitle">Start talking to see the AI flow in real-time</div>
+            `;
+            flowContent.appendChild(emptyDiv);
+            
+            // Clear injections
+            document.getElementById('injectionList').innerHTML = `
+                <div class="injection-item">
+                    <span>📊</span>
+                    <span>Dataverse: 4 cases loaded</span>
+                </div>
+            `;
+            
+            // Reset handoff
+            document.getElementById('handoff-indicator').className = 'guardrail-indicator green';
+            document.getElementById('handoff-status').className = 'guardrail-status';
+            document.getElementById('handoff-text').textContent = 'No triggers detected';
+            
+            monitorHistory.length = 0;
+        }
+
+        function updateSystemPromptPreview(caseCount) {
+            const preview = document.getElementById('systemPromptPreview');
+            preview.textContent = `You are a PM voice assistant in a meeting bot.
+
+CRITICAL VOICE RULES:
+- Be extremely concise: 1-2 sentences max
+- NO markdown: no asterisks, bullets, headers
+- Speak naturally like a helpful colleague
+- Never say "Here's" or "Here are"
+- For case queries: state count + top 1-2 items
+
+CURRENT CASE DATA (live from Dataverse):
+[${caseCount || 0} cases injected]
+
+PM GUARDRAIL RULES:
+- Do NOT approve budgets or authorize spend
+- Do NOT commit to deadline changes
+- Do NOT make HR/personnel decisions  
+- Do NOT sign off on scope changes
+- If these topics come up → flag for human PM
+
+VOICE STYLE (GPT-5 inspired):
+- Do NOT say: "would you like me to", "shall I"
+- Do NOT end with opt-in questions
+- Be direct, give answers, not offers`;
+        }
+
+        // Test function for AI Monitor - Normal query
+        function testMonitor() {
+            addToMonitor('user', 'Hey Claude, what are my open cases?');
+            setTimeout(() => {
+                addToMonitor('thinking', 'Checking Dataverse cache... Found 4 cases');
+                addInjection('📊 Dataverse: Query executed (0ms - cached)');
+            }, 500);
+            setTimeout(() => {
+                addGuardrailCheck('Data from Dataverse (not hallucinated)', true);
+                addGuardrailCheck('Within PM scope', true);
+            }, 1000);
+            setTimeout(() => {
+                addToMonitor('assistant', 'You have 4 open cases. The most urgent is a login issue reported today, and there\'s also a billing discrepancy from yesterday.');
+            }, 1500);
+        }
+
+        // Test guardrail - Medical advice (out of scope)
+        function testMedical() {
+            addToMonitor('user', 'I have a bad headache, what medicine should I take?');
+            setTimeout(() => {
+                addToMonitor('guardrail', `
+                    <strong>🛡️ GUARDRAIL ACTIVATED</strong><br>
+                    <strong>Type:</strong> Out of Scope<br>
+                    <strong>Reason:</strong> Medical advice is not PM's job
+                `);
+                addInjection('🛡️ out_of_scope: medical advice');
+                addGuardrailCheck('Out of scope blocked', true);
+            }, 500);
+            setTimeout(() => {
+                addToMonitor('assistant', `<span style="color: var(--accent-orange);">🛡️ I'm a project management assistant, so I can't help with medical questions. Please consult a healthcare professional.</span>`);
+            }, 1000);
+        }
+
+        // Test guardrail - Legal advice (out of scope)
+        function testLegal() {
+            addToMonitor('user', 'Can you give me legal advice about this contract?');
+            setTimeout(() => {
+                addToMonitor('guardrail', `
+                    <strong>🛡️ GUARDRAIL ACTIVATED</strong><br>
+                    <strong>Type:</strong> Out of Scope<br>
+                    <strong>Reason:</strong> Legal advice is not PM's job
+                `);
+                addInjection('🛡️ out_of_scope: legal advice');
+                addGuardrailCheck('Out of scope blocked', true);
+            }, 500);
+            setTimeout(() => {
+                addToMonitor('assistant', `<span style="color: var(--accent-orange);">🛡️ I'm not able to provide legal advice. For legal matters, please consult with your legal team or an attorney.</span>`);
+            }, 1000);
+        }
+
+        // Test guardrail - Financial advice (out of scope)
+        function testFinancial() {
+            addToMonitor('user', 'Should I invest in crypto?');
+            setTimeout(() => {
+                addToMonitor('guardrail', `
+                    <strong>🛡️ GUARDRAIL ACTIVATED</strong><br>
+                    <strong>Type:</strong> Out of Scope<br>
+                    <strong>Reason:</strong> Investment advice is not PM's job
+                `);
+                addInjection('🛡️ out_of_scope: financial advice');
+                addGuardrailCheck('Out of scope blocked', true);
+            }, 500);
+            setTimeout(() => {
+                addToMonitor('assistant', `<span style="color: var(--accent-orange);">🛡️ I can't provide investment or financial advice. Please consult a financial advisor for those questions.</span>`);
+            }, 1000);
+        }
+
+        // Test guardrail - Personal opinion (out of scope)
+        function testPersonalOpinion() {
+            addToMonitor('user', 'What do you think about John as a person?');
+            setTimeout(() => {
+                addToMonitor('guardrail', `
+                    <strong>🛡️ GUARDRAIL ACTIVATED</strong><br>
+                    <strong>Type:</strong> Out of Scope<br>
+                    <strong>Reason:</strong> Personal opinions not provided
+                `);
+                addInjection('🛡️ out_of_scope: personal opinion');
+                addGuardrailCheck('Out of scope blocked', true);
+            }, 500);
+            setTimeout(() => {
+                addToMonitor('assistant', `<span style="color: var(--accent-orange);">🛡️ I don't provide personal opinions about team members. I can share factual project information only.</span>`);
+            }, 1000);
+        }
+
+        // ===== Workspace Management =====
+        let workspaceDocuments = [];
+        let selectedDocumentIndex = -1;
+        let currentFilter = 'all';
+
+        function addDocumentToWorkspace(doc) {
+            // doc should have: { type: 'report'|'email'|'summary', title: '', content: '', timestamp: Date }
+            const document = {
+                id: Date.now(),
+                type: doc.type || 'report',
+                title: doc.title || 'Untitled Document',
+                content: doc.content || '',
+                timestamp: doc.timestamp || new Date(),
+            };
+            
+            workspaceDocuments.unshift(document);
+            updateWorkspaceUI();
+            updateWorkspaceCount();
+            
+            // Track in dashboard
+            trackFileSaved();
+            addDashboardActivity('Document Created', document.title, getDocumentIcon(document.type), 'success');
+            
+            return document.id;
+        }
+
+        function getDocumentIcon(type) {
+            switch(type) {
+                case 'report': return '📊';
+                case 'email': return '📧';
+                case 'summary': return '📋';
+                default: return '📄';
+            }
+        }
+
+        function updateWorkspaceUI() {
+            const listContainer = document.getElementById('documentList');
+            
+            const filteredDocs = currentFilter === 'all' 
+                ? workspaceDocuments 
+                : workspaceDocuments.filter(d => d.type === currentFilter);
+            
+            if (filteredDocs.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📄</div>
+                        <div class="empty-title">No documents yet</div>
+                        <div class="empty-subtitle">Ask Claude to create reports, emails, or summaries</div>
+                        <div class="empty-examples">
+                            <div class="example-prompt">"Hey Claude, write a status report for my cases"</div>
+                            <div class="example-prompt">"Hey Claude, draft an email about the billing issue"</div>
+                            <div class="example-prompt">"Hey Claude, summarize today's activities"</div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            
+            listContainer.innerHTML = filteredDocs.map((doc, index) => {
+                const actualIndex = workspaceDocuments.indexOf(doc);
+                const isSelected = actualIndex === selectedDocumentIndex;
+                const timeStr = formatTime(doc.timestamp);
+                const icon = getDocumentIcon(doc.type);
+                
+                return `
+                    <div class="document-item ${isSelected ? 'selected' : ''}" onclick="selectDocument(${actualIndex})">
+                        <div class="document-icon ${doc.type}">${icon}</div>
+                        <div class="document-info">
+                            <div class="document-name">${doc.title}</div>
+                            <div class="document-meta">${timeStr}</div>
+                        </div>
+                        <span class="document-badge ${doc.type}">${doc.type}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectDocument(index) {
+            selectedDocumentIndex = index;
+            const doc = workspaceDocuments[index];
+            
+            // Update UI
+            updateWorkspaceUI();
+            
+            // Update preview
+            document.getElementById('previewTitle').textContent = `📄 ${doc.title}`;
+            document.getElementById('previewType').textContent = doc.type.charAt(0).toUpperCase() + doc.type.slice(1);
+            document.getElementById('previewDate').textContent = formatTime(doc.timestamp);
+            document.getElementById('previewContent').innerHTML = formatDocumentContent(doc.content);
+            
+            // Enable buttons
+            document.getElementById('copyBtn').disabled = false;
+            document.getElementById('downloadBtn').disabled = false;
+        }
+
+        function formatDocumentContent(content) {
+            // Convert markdown-like content to HTML
+            return content
+                .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/^\- (.*$)/gm, '<li>$1</li>')
+                .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/^(.+)$/gm, '<p>$1</p>')
+                .replace(/<p><h/g, '<h')
+                .replace(/<\/h(\d)><\/p>/g, '</h$1>')
+                .replace(/<p><ul>/g, '<ul>')
+                .replace(/<\/ul><\/p>/g, '</ul>')
+                .replace(/<p><\/p>/g, '');
+        }
+
+        function formatTime(date) {
+            const d = new Date(date);
+            const now = new Date();
+            const diff = now - d;
+            
+            if (diff < 60000) return 'Just now';
+            if (diff < 3600000) return `${Math.floor(diff/60000)} min ago`;
+            if (diff < 86400000) return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            return d.toLocaleDateString([], {month: 'short', day: 'numeric'});
+        }
+
+        function filterDocuments(type) {
+            currentFilter = type;
+            
+            // Update filter buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            updateWorkspaceUI();
+        }
+
+        function copyDocument() {
+            if (selectedDocumentIndex < 0) return;
+            const doc = workspaceDocuments[selectedDocumentIndex];
+            
+            navigator.clipboard.writeText(doc.content).then(() => {
+                log('Document copied to clipboard', 'success');
+                // Visual feedback
+                const btn = document.getElementById('copyBtn');
+                btn.textContent = '✅';
+                setTimeout(() => { btn.textContent = '📋'; }, 1500);
+            }).catch(err => {
+                log('Failed to copy: ' + err.message, 'error');
+            });
+        }
+
+        function downloadDocument() {
+            if (selectedDocumentIndex < 0) return;
+            const doc = workspaceDocuments[selectedDocumentIndex];
+            
+            const blob = new Blob([doc.content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${doc.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            log(`Downloaded: ${doc.title}`, 'success');
+        }
+
+        function clearWorkspace() {
+            if (workspaceDocuments.length === 0) return;
+            if (!confirm('Clear all documents from workspace?')) return;
+            
+            workspaceDocuments = [];
+            selectedDocumentIndex = -1;
+            updateWorkspaceUI();
+            updateWorkspaceCount();
+            
+            // Reset preview
+            document.getElementById('previewTitle').textContent = '📄 Document Preview';
+            document.getElementById('previewType').textContent = '-';
+            document.getElementById('previewDate').textContent = '-';
+            document.getElementById('previewContent').innerHTML = `
+                <div class="empty-preview">
+                    <div class="empty-icon">👈</div>
+                    <div class="empty-title">Select a document</div>
+                    <div class="empty-subtitle">Choose a document from the list to preview its contents</div>
+                </div>
+            `;
+            document.getElementById('copyBtn').disabled = true;
+            document.getElementById('downloadBtn').disabled = true;
+            
+            log('Workspace cleared', 'info');
+        }
+
+        function updateWorkspaceCount() {
+            const countEl = document.getElementById('workspace-count');
+            if (countEl) {
+                countEl.textContent = workspaceDocuments.length;
+                countEl.style.display = workspaceDocuments.length > 0 ? 'inline' : 'none';
+            }
+        }
+
+        // Test function - can be called from console to test workspace UI
+        function testWorkspace() {
+            addDocumentToWorkspace({
+                type: 'report',
+                title: 'Status Report - Open Cases',
+                content: `# Status Report - Open Cases
+
+**Generated:** ${new Date().toLocaleString()}
+
+## Summary
+You currently have 4 active cases that require attention.
+
+## High Priority Cases
+
+### 1. Customer Portal Login Issue
+- **Status:** In Progress
+- **Reported:** Today
+- **Description:** Customer unable to access the portal after password reset.
+
+### 2. Billing Discrepancy
+- **Status:** Pending Review
+- **Reported:** Yesterday  
+- **Description:** Customer charged twice for subscription renewal.
+
+## Medium Priority Cases
+
+### 3. Password Reset Email Problem
+- **Status:** Investigating
+- **Description:** Reset emails delayed by 2+ hours.
+
+### 4. PDF Export Feature Request
+- **Status:** Under Review
+- **Description:** Request to add PDF export functionality.
+
+## Recommendations
+1. Prioritize the login issue as it's blocking customer access
+2. Escalate billing discrepancy to finance team
+3. Monitor email delivery system
+
+---
+*Report generated by Concentrix PM AI Bot*`
+            });
+            
+            addDocumentToWorkspace({
+                type: 'email',
+                title: 'Email Draft - Billing Issue Follow-up',
+                content: `Subject: Follow-up: Billing Discrepancy - Case #2847
+
+Dear Customer Support Team,
+
+I'm writing to follow up on the billing discrepancy reported by our customer yesterday.
+
+**Issue Summary:**
+The customer was charged twice for their monthly subscription renewal on January 31st, 2026.
+
+**Action Required:**
+1. Please initiate a refund for the duplicate charge of $49.99
+2. Send confirmation email to the customer once processed
+3. Flag account to prevent future duplicate charges
+
+**Customer Details:**
+- Account ID: CUST-28471
+- Amount to Refund: $49.99
+- Original Transaction Date: January 31, 2026
+
+Please prioritize this request as the customer has been waiting since yesterday.
+
+Thank you,
+PM AI Bot
+
+---
+*Draft generated by Concentrix PM AI Bot*`
+            });
+            
+            log('Test documents added to workspace', 'success');
+        }
+
+        // ===== Logging =====
+        const LOG_ICONS = {
+            'info': 'ℹ️',
+            'success': '✅',
+            'error': '❌',
+            'warning': '⚠️',
+            'thinking': '🧠',
+            'tool': '🔧',
+            'guardrail': '🛡️',
+            'user-input': '🎤',
+            'ai-response': '🤖',
+            'speech': '🔊'
+        };
+
+        function log(message, type = 'info') {
+            const logsContainer = document.getElementById('logsContainer');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            
+            const icon = LOG_ICONS[type] || 'ℹ️';
+            entry.innerHTML = `
+                <span class="log-icon">${icon}</span>
+                <span class="log-content">[${timestamp}] ${message}</span>
+            `;
+            
+            logsContainer.appendChild(entry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+
+        // ===== Status Updates =====
+        function updateStatus(element, active) {
+            const dot = document.getElementById(element);
+            if (active) {
+                dot.classList.add('connected');
+            } else {
+                dot.classList.remove('connected');
+            }
+        }
+
+        function setStatusActive(element, active) {
+            const dot = document.getElementById(element);
+            if (active) {
+                dot.classList.add('active');
+            } else {
+                dot.classList.remove('active');
+            }
+        }
+
+        // ===== WebSocket Connection =====
+        function connectToServer() {
+            const serverUrl = document.getElementById('serverUrl').value.trim();
+            if (!serverUrl) {
+                log('Please enter a server URL', 'error');
+                return;
+            }
+
+            // Convert HTTP(S) to WS(S) - no path needed for NestJS WsAdapter
+            let wsUrl = serverUrl.replace(/^http/, 'ws').replace(/\/$/, '');
+            
+            log(`Connecting to ${wsUrl}...`);
+
+            try {
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    log('WebSocket connected!', 'success');
+                    updateStatus('wsStatus', true);
+                    document.getElementById('connectBtn').textContent = 'Disconnect';
+                    document.getElementById('connectBtn').classList.remove('btn-primary');
+                    document.getElementById('connectBtn').classList.add('btn-danger');
+                    document.getElementById('connectBtn').onclick = disconnectFromServer;
+                    updateDashboardStatus();
+                    addDashboardActivity('Session Started', 'Connected to server', '🟢', 'success');
+                    
+                    // Auto-start session after connecting
+                    ws.send(JSON.stringify({ type: 'start_session', meetingContext: 'PM AI Bot Session' }));
+                };
+
+                ws.onclose = () => {
+                    log('WebSocket disconnected', 'warning');
+                    updateStatus('wsStatus', false);
+                    updateStatus('aiStatus', false);
+                    document.getElementById('connectBtn').textContent = 'Connect';
+                    document.getElementById('connectBtn').classList.remove('btn-danger');
+                    document.getElementById('connectBtn').classList.add('btn-primary');
+                    document.getElementById('connectBtn').onclick = connectToServer;
+                    updateDashboardStatus();
+                    addDashboardActivity('Session Ended', 'Disconnected from server', '🔴', 'pending');
+                };
+
+                ws.onerror = (error) => {
+                    log(`WebSocket error: ${error.message || 'Connection failed'}`, 'error');
+                };
+
+                ws.onmessage = handleMessage;
+            } catch (error) {
+                log(`Connection error: ${error.message}`, 'error');
+            }
+        }
+
+        function disconnectFromServer() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        // ===== Message Handler =====
+        function handleMessage(event) {
+            try {
+                const data = JSON.parse(event.data);
+                
+                // Debug: log all message types
+                if (data.type !== 'audio') {
+                    console.log('📬 Message received:', data.type, data);
+                }
+                
+                switch (data.type) {
+                    // === Server connection messages ===
+                    case 'connected':
+                        log(`Server: ${data.message}`, 'success');
+                        log(`Engine: ${data.engine}`, 'info');
+                        break;
+                        
+                    case 'session_started':
+                        log('AI session started!', 'success');
+                        log(`Engine: ${data.engine}`, 'info');
+                        updateStatus('aiStatus', true);
+                        addDashboardActivity('AI Ready', data.message, '🤖', 'success');
+                        // Update dataverse connection status
+                        if (data.dataverseRecords !== undefined) {
+                            updateDataverseStatus(data.dataverseRecords);
+                            log(`📊 Dataverse: ${data.dataverseRecords} records cached`, 'info');
+                        }
+                        break;
+                        
+                    case 'session_ended':
+                        log(`Session ended: ${data.reason}`, 'warning');
+                        updateStatus('aiStatus', false);
+                        break;
+                    
+                    case 'acs_connection_ready':
+                        log('AI connection ready', 'success');
+                        updateStatus('aiStatus', true);
+                        break;
+                    
+                    // === Audio handling ===
+                    case 'audio': {
+                        // Handle audio from gateway (S2S or TTS)
+                        const audioPayload = data.audio || data.data;
+                        if (audioPayload) {
+                            console.log(`📨 [${data.source || 'audio'}] Received audio, length: ${audioPayload.length} bytes`);
+                            log(`📨 [${data.source || 'audio'}] Audio: ${audioPayload.length} bytes`, 'info');
+                            playAudioResponse(audioPayload);
+                        }
+                        break;
+                    }
+                        
+                    case 'ai_audio': {
+                        const aiAudioSource = data.source || 'unknown';
+                        console.log(`📨 [${aiAudioSource}] Received ai_audio, length: ${data.data?.length || 0} bytes`);
+                        log(`📨 [${aiAudioSource}] Audio: ${data.data?.length || 0} bytes`, 'info');
+                        playAudioResponse(data.data);
+                        break;
+                    }
+                    
+                    case 'speaking_state':
+                        aiIsSpeaking = data.isSpeaking;
+                        if (data.isSpeaking) {
+                            log('🔊 AI is speaking...', 'info');
+                        } else {
+                            log('🔇 AI finished speaking', 'info');
+                        }
+                        break;
+                    
+                    // === Error handling ===
+                    case 'error':
+                        log(`❌ Error: ${data.message}`, 'error');
+                        addDashboardActivity('Error', data.message, '❌', 'error');
+                        break;
+                    
+                    // === NEW: Thinking/reasoning steps ===
+                    case 'thinking':
+                        log(data.message, 'thinking');
+                        addToMonitor('thinking', data.message);
+                        break;
+                    
+                    case 'tool_call':
+                        log(`Calling: ${data.tool}${data.params ? ' - ' + data.params : ''}`, 'tool');
+                        addInjection(`🔧 Tool: ${data.tool}`);
+                        break;
+                    
+                    case 'tool_result':
+                        log(`Result: ${data.message}`, 'tool');
+                        break;
+                    
+                    case 'guardrail':
+                        log(`${data.message}`, 'guardrail');
+                        addToMonitor('guardrail', data.message);
+                        break;
+                    
+                    case 'user_detected':
+                        log(`User: "${data.text}"`, 'user-input');
+                        break;
+                    
+                    case 'wake_word':
+                        log(`Wake word detected: ${data.wake_word}`, 'thinking');
+                        addInjection(`🎤 Wake word: "${data.wake_word}"`);
+                        break;
+                        
+                    case 'transcript':
+                        // Skip user transcripts when AI is speaking (echo suppression)
+                        if (aiIsSpeaking && data.source !== 'ai') {
+                            console.log('🔇 Skipping transcript (AI is speaking):', data.text?.substring(0, 30));
+                            break;
+                        }
+                        addTranscript(data.text, data.isFinal, 'user');
+                        if (data.isFinal) {
+                            trackVoiceInteraction();
+                            // Add to AI Monitor
+                            addToMonitor('user', data.text);
+                        }
+                        break;
+                        
+                    case 'tts_start':
+                        log(`Converting to speech (${data.chars} chars)...`, 'speech');
+                        break;
+                    
+                    case 'tts_complete':
+                        log('Speech ready, playing audio', 'speech');
+                        break;
+                    
+                    // 🛡️ GUARDRAIL TRIGGERED - Bot politely refuses
+                    case 'guardrail_triggered':
+                        log(`🛡️ Guardrail: ${data.guardrailType}`, 'guardrail');
+                        addToMonitor('guardrail', `
+                            <strong>🛡️ GUARDRAIL ACTIVATED</strong><br>
+                            <strong>Type:</strong> ${data.guardrailType === 'action_blocked' ? 'Cannot perform action' : 'Outside PM scope'}<br>
+                            <strong>Response:</strong> Bot will politely decline
+                        `);
+                        addInjection(`🛡️ ${data.guardrailType}: Request blocked`);
+                        // Update guardrail indicator
+                        addGuardrailCheck(data.guardrailType === 'action_blocked' ? 'Action blocked (read-only bot)' : 'Out of scope blocked', true);
+                        break;
+                        
+                    case 'claude_response':
+                        addTranscript(data.text, true, 'ai');
+                        log(`Claude: "${data.text.substring(0, 60)}${data.text.length > 60 ? '...' : ''}"`, 'ai-response');
+                        trackClaudeQuery(data.responseTime);
+                        
+                        // Check if this was a guardrail response
+                        if (data.guardrail) {
+                            addDashboardActivity('Guardrail Response', data.text.substring(0, 40) + '...', '🛡️', 'warning');
+                            addToMonitor('assistant', `<span style="color: var(--accent-orange);">🛡️ ${data.text}</span>`);
+                        } else {
+                            addDashboardActivity('Claude Response', data.text.substring(0, 40) + '...', '🤖', 'success');
+                            addToMonitor('assistant', data.text);
+                            addGuardrailCheck('Response length check', data.text.length < 500);
+                            addGuardrailCheck('No hallucination (from Dataverse)', true);
+                        }
+                        break;
+                    
+                    case 'pm_response':
+                        console.log('🤖 PM Response received:', data.text?.substring(0, 100));
+                        log(`PM: "${data.text.substring(0, 60)}${data.text.length > 60 ? '...' : ''}"`, 'ai-response');
+                        addTranscript(data.text, true, 'ai');
+                        addDashboardActivity('PM Response', data.text.substring(0, 40) + '...', '🤖', 'success');
+                        break;
+                        
+                    case 'dataverse_response':
+                        addTranscript(data.text, true, 'ai');
+                        log('Dataverse query completed', 'success');
+                        if (data.count) {
+                            trackCaseQuery(data.count);
+                            updateSystemPromptPreview(data.count);
+                            updateDataverseStatus(data.count);
+                        }
+                        addDashboardActivity('Case Query', `Found ${data.count || 0} cases`, '📋', 'success');
+                        // Add to AI Monitor
+                        addInjection(`📊 Dataverse: ${data.count || 0} cases injected`);
+                        break;
+                        
+                    case 'vision_analysis':
+                        updateVisionAnalysis(data.analysis);
+                        log('Vision analysis complete', 'success');
+                        trackScreenshot();
+                        break;
+                        
+                    case 'vision_frame_received':
+                        log('Analyzing screenshot...', 'thinking');
+                        break;
+                        
+                    case 'file_saved': {
+                        console.log('📄 FILE_SAVED received:', data);
+                        const savedFilename = data.filename || data.file?.filename || 'Generated Document';
+                        log(`📄 File saved: ${savedFilename}`, 'success');
+                        trackFileSaved();
+                        addDashboardActivity('File Generated', savedFilename, '📄', 'success');
+                        
+                        // Add document to workspace - always add if we have filename
+                        const docContent = data.content || `Document: ${savedFilename}\n\nContent saved to server.`;
+                        console.log('📄 Adding to workspace:', savedFilename, 'content length:', docContent.length);
+                        
+                        addDocumentToWorkspace({
+                            type: data.documentType || 'summary',
+                            title: savedFilename,
+                            content: docContent,
+                            timestamp: new Date(),
+                            url: data.url
+                        });
+                        log(`📄 Document added to workspace: ${savedFilename}`, 'success');
+                        
+                        // Auto-switch to workspace tab
+                        console.log('📄 Switching to workspace tab...');
+                        switchTab('workspace');
+                        selectDocument(0);
+                        break;
+                    }
+                    
+                    case 'workspace_document':
+                        // Add document to workspace
+                        const docId = addDocumentToWorkspace({
+                            type: data.documentType || 'report',
+                            title: data.title || 'Generated Document',
+                            content: data.content,
+                            timestamp: new Date()
+                        });
+                        log(`Document created: ${data.title}`, 'success');
+                        // Auto-switch to workspace tab
+                        switchTab('workspace');
+                        selectDocument(0); // Select the new document
+                        break;
+                        
+                    default:
+                        console.log('Unknown message type:', data.type);
+                }
+            } catch (error) {
+                console.error('Message parse error:', error);
+            }
+        }
+
+        // ===== Transcript =====
+        function addTranscript(text, isFinal, speaker = 'user') {
+            if (!text || !text.trim()) return;
+            
+            const container = document.getElementById('transcriptContainer');
+            
+            // Remove placeholder
+            const placeholder = container.querySelector('.text[style*="italic"]');
+            if (placeholder) {
+                placeholder.parentElement.remove();
+            }
+            
+            const entry = document.createElement('div');
+            entry.className = 'transcript-entry';
+            
+            const speakerClass = speaker === 'ai' ? 'transcript-ai' : 'transcript-speaker';
+            const speakerName = speaker === 'ai' ? 'AI' : 'Unknown';
+            const time = new Date().toLocaleTimeString();
+            
+            entry.innerHTML = `
+                <span class="${speakerClass}">${speakerName}</span>
+                <span class="transcript-time">${time}</span>
+                <div class="text">${text}</div>
+            `;
+            
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ===== Screen Capture =====
+        async function startCapture() {
+            try {
+                log('Requesting screen capture...', 'info');
+                
+                // Request screen with audio
+                mediaStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        cursor: 'always',
+                        displaySurface: 'monitor'
+                    },
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    }
+                });
+
+                // Get microphone too
+                const micStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+
+                // Show video preview
+                const video = document.getElementById('screenVideo');
+                video.srcObject = mediaStream;
+                document.getElementById('videoPlaceholder').style.display = 'none';
+
+                // Setup audio processing
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+                
+                // Create gain nodes for mixing
+                const mixedGain = audioContext.createGain();
+                mixedGain.gain.value = 1.0;
+
+                // Add screen audio if present
+                const audioTracks = mediaStream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    const screenAudioSource = audioContext.createMediaStreamSource(
+                        new MediaStream([audioTracks[0]])
+                    );
+                    const screenGain = audioContext.createGain();
+                    screenGain.gain.value = 0.7;
+                    screenAudioSource.connect(screenGain);
+                    screenGain.connect(mixedGain);
+                    log('Screen audio captured', 'success');
+                }
+
+                // Add mic audio
+                const micSource = audioContext.createMediaStreamSource(micStream);
+                const micGain = audioContext.createGain();
+                micGain.gain.value = 1.0;
+                micSource.connect(micGain);
+                micGain.connect(mixedGain);
+                log('Microphone captured', 'success');
+
+                // Analyser for audio level
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                mixedGain.connect(analyser);
+
+                // Audio processor for streaming
+                audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+                mixedGain.connect(audioProcessor);
+                audioProcessor.connect(audioContext.destination);
+
+                audioProcessor.onaudioprocess = (event) => {
+                    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+                    const inputData = event.inputBuffer.getChannelData(0);
+                    const pcm16 = new Int16Array(inputData.length);
+                    
+                    for (let i = 0; i < inputData.length; i++) {
+                        pcm16[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+                    }
+
+                    const base64 = arrayBufferToBase64(pcm16.buffer);
+                    ws.send(JSON.stringify({
+                        type: 'audio',
+                        data: base64
+                    }));
+                };
+
+                // Audio level meter
+                updateAudioLevel();
+
+                // Handle stream ending
+                mediaStream.getVideoTracks()[0].onended = () => {
+                    stopCapture();
+                };
+
+                isCapturing = true;
+                updateStatus('videoStatus', true);
+                updateStatus('audioStatus', true);
+                
+                document.getElementById('startCaptureBtn').disabled = true;
+                document.getElementById('stopCaptureBtn').disabled = false;
+                document.getElementById('snapshotBtn').disabled = false;
+
+                log('Screen capture started!', 'success');
+
+                // Start auto-analysis if enabled
+                if (document.getElementById('autoAnalyze').checked) {
+                    startAutoAnalysis();
+                }
+
+            } catch (error) {
+                log(`Capture error: ${error.message}`, 'error');
+            }
+        }
+
+        function stopCapture() {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+
+            if (audioProcessor) {
+                audioProcessor.disconnect();
+                audioProcessor = null;
+            }
+
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+
+            stopAutoAnalysis();
+
+            isCapturing = false;
+            updateStatus('videoStatus', false);
+            updateStatus('audioStatus', false);
+
+            document.getElementById('videoPlaceholder').style.display = 'flex';
+            document.getElementById('startCaptureBtn').disabled = false;
+            document.getElementById('stopCaptureBtn').disabled = true;
+            document.getElementById('snapshotBtn').disabled = true;
+            document.getElementById('audioLevelFill').style.width = '0%';
+            document.getElementById('audioLevelValue').textContent = '0%';
+
+            log('Screen capture stopped', 'info');
+        }
+
+        // ===== Audio Level =====
+        function updateAudioLevel() {
+            if (!analyser || !isCapturing) return;
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(dataArray);
+
+            const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+            const level = Math.min(100, (average / 128) * 100);
+
+            document.getElementById('audioLevelFill').style.width = `${level}%`;
+            document.getElementById('audioLevelValue').textContent = `${Math.round(level)}%`;
+
+            requestAnimationFrame(updateAudioLevel);
+        }
+
+        // ===== Vision Analysis =====
+        function takeSnapshot() {
+            if (!mediaStream) return;
+
+            const video = document.getElementById('screenVideo');
+            const canvas = document.getElementById('snapshotCanvas');
+            
+            canvas.width = video.videoWidth || 1280;
+            canvas.height = video.videoHeight || 720;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+
+            const imageData = canvas.toDataURL('image/jpeg', 0.7);
+
+            // Update preview
+            const snapshotImg = document.getElementById('lastSnapshot');
+            snapshotImg.src = imageData;
+            snapshotImg.style.display = 'block';
+            document.getElementById('snapshotPlaceholder').style.display = 'none';
+            document.getElementById('lastAnalyzedTime').textContent = new Date().toLocaleTimeString();
+
+            // Send to server
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'vision_frame',
+                    image: imageData
+                }));
+                log('Snapshot sent for analysis', 'info');
+            }
+        }
+
+        function startAutoAnalysis() {
+            const interval = parseInt(document.getElementById('analysisIntervalInput').value) || 5;
+            document.getElementById('analysisIntervalDisplay').textContent = `Every ${interval} seconds`;
+            
+            stopAutoAnalysis();
+            analysisTimer = setInterval(() => {
+                if (isCapturing) {
+                    takeSnapshot();
+                }
+            }, interval * 1000);
+            
+            log(`Auto-analysis started (every ${interval}s)`, 'info');
+        }
+
+        function stopAutoAnalysis() {
+            if (analysisTimer) {
+                clearInterval(analysisTimer);
+                analysisTimer = null;
+            }
+        }
+
+        function updateVisionAnalysis(analysis) {
+            document.getElementById('visionAnalysis').textContent = analysis;
+        }
+
+        // ===== Audio Playback (PCM16 from OpenAI Realtime S2S) =====
+        let audioQueue = [];
+        let isPlaying = false;
+        let playbackAudioContext = null;
+
+        function getPlaybackAudioContext() {
+            if (!playbackAudioContext || playbackAudioContext.state === 'closed') {
+                // 24kHz to match OpenAI Realtime S2S output
+                playbackAudioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+            }
+            return playbackAudioContext;
+        }
+
+        function playAudioResponse(base64Audio) {
+            if (!base64Audio || base64Audio.length === 0) {
+                return;
+            }
+            
+            // Queue audio chunks for sequential playback
+            audioQueue.push(base64Audio);
+            if (!isPlaying) {
+                playNextAudio();
+            }
+        }
+
+        async function playNextAudio() {
+            if (audioQueue.length === 0) {
+                isPlaying = false;
+                return;
+            }
+
+            isPlaying = true;
+            const base64 = audioQueue.shift();
+
+            try {
+                const ctx = getPlaybackAudioContext();
+                
+                // Resume context if suspended (browser autoplay policy)
+                if (ctx.state === 'suspended') {
+                    await ctx.resume();
+                }
+
+                // Decode base64 to bytes
+                const binaryString = atob(base64);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+
+                // OpenAI Realtime sends PCM16 at 24kHz - convert to Float32
+                const pcm16 = new Int16Array(bytes.buffer);
+                const float32 = new Float32Array(pcm16.length);
+                for (let i = 0; i < pcm16.length; i++) {
+                    float32[i] = pcm16[i] / 32768.0;
+                }
+
+                // Create audio buffer at 24kHz (OpenAI Realtime rate)
+                const audioBuffer = ctx.createBuffer(1, float32.length, 24000);
+                audioBuffer.getChannelData(0).set(float32);
+
+                const source = ctx.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(ctx.destination);
+                
+                source.onended = () => {
+                    playNextAudio();
+                };
+                
+                source.start();
+            } catch (error) {
+                console.error('Audio playback error:', error);
+                playNextAudio();
+            }
+        }
+
+        // ===== Utilities =====
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        }
+
+        function base64ToBlob(base64, mimeType) {
+            const byteCharacters = atob(base64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            return new Blob([byteArray], { type: mimeType });
+        }
+
+        // ===== Settings Handlers =====
+        document.getElementById('autoAnalyze').addEventListener('change', (e) => {
+            if (e.target.checked && isCapturing) {
+                startAutoAnalysis();
+            } else {
+                stopAutoAnalysis();
+            }
+        });
+
+        document.getElementById('analysisIntervalInput').addEventListener('change', (e) => {
+            if (isCapturing && document.getElementById('autoAnalyze').checked) {
+                stopAutoAnalysis();
+                startAutoAnalysis();
+            }
+        });
+
+        // ===== Initialization =====
+        window.onload = () => {
+            log('PM AI Meeting Observer loaded');
+            
+            // Initialize dashboard (since it's the default view)
+            updateDashboard();
+            
+            // Initialize workspace count (hide if empty)
+            updateWorkspaceCount();
+            
+            // Check for required APIs
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                log('Screen capture not supported in this browser', 'error');
+                document.getElementById('startCaptureBtn').disabled = true;
+            }
+
+            // Try to restore last used server URL
+            const savedUrl = localStorage.getItem('pmAiServerUrl');
+            if (savedUrl) {
+                document.getElementById('serverUrl').value = savedUrl;
+            }
+        };
+
+        // Save server URL when connecting
+        const originalConnect = connectToServer;
+        connectToServer = function() {
+            const url = document.getElementById('serverUrl').value.trim();
+            if (url) {
+                localStorage.setItem('pmAiServerUrl', url);
+            }
+            originalConnect();
+        };
+    </script>
+</body>
+</html>

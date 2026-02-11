@@ -1,0 +1,1 @@
+I can create a report for you. What should the report cover? For example, do you want a summary of your current cases, a status update on open issues, or something else?

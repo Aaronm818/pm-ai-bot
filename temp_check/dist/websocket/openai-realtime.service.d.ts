@@ -1,0 +1,42 @@
+import { OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+export declare class OpenAIRealtimeService implements OnModuleInit {
+    private readonly configService;
+    private logger;
+    private sessions;
+    private audioResponseCallback;
+    private transcriptCallback;
+    private getVisionContextCallback;
+    private speakingStateChangedCallback;
+    private pmTextResponseCallback;
+    private silentDocumentCallback;
+    private pmWakeWordPatterns;
+    private claudeWakeWordPatterns;
+    private claudeRequestCallback;
+    constructor(configService: ConfigService);
+    onModuleInit(): void;
+    setAudioResponseCallback(callback: ((serverCallId: string, audioBase64: string) => void) | null): void;
+    setTranscriptCallback(callback: (serverCallId: string, text: string, isFinal: boolean) => void): void;
+    setVisionContextCallback(callback: (serverCallId: string) => string | null): void;
+    setSpeakingStateChangedCallback(callback: (serverCallId: string, isSpeaking: boolean) => void): void;
+    setPmTextResponseCallback(callback: (serverCallId: string, text: string) => Promise<void>): void;
+    setClaudeRequestCallback(callback: (serverCallId: string, transcript: string, visionContext: string | null) => Promise<void>): void;
+    setSilentDocumentCallback(callback: (serverCallId: string, transcript: string) => Promise<void>): void;
+    isSpeaking(serverCallId: string): boolean;
+    createSession(serverCallId: string): Promise<boolean>;
+    private configureSession;
+    sendAudio(serverCallId: string, audioBase64: string): void;
+    private handleOpenAIMessage;
+    private handleTranscript;
+    triggerResponse(serverCallId: string): void;
+    private triggerResponseWithVision;
+    private analyzeScreenshot;
+    endSession(serverCallId: string): void;
+    getTranscript(serverCallId: string): Array<{
+        role: string;
+        text: string;
+        timestamp: Date;
+    }>;
+    getSessionStatus(serverCallId: string): any;
+    getActiveSessions(): string[];
+}

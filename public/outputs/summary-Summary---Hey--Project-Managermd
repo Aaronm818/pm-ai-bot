@@ -1,0 +1,35 @@
+# Case Summary Report
+
+## Overview
+Summary of current active cases in your workspace. **4 total cases** requiring attention and management.
+
+## Key Points
+- **3 Critical Issues** impacting customer operations
+  - Login/portal access outage
+  - Billing error (duplicate charge)
+  - Password reset functionality failure
+- **1 Enhancement Request** (low priority)
+  - PDF export feature request
+
+## Current Status
+| Case | Priority | Status |
+|------|----------|--------|
+| Login issues | 🔴 Critical | Active |
+| Billing discrepancy | 🔴 Critical | Active |
+| Password reset | 🔴 Critical | Active |
+| Feature request | 🟡 Low | Active |
+
+## Notable Items Requiring Attention
+⚠️ **Immediate Action Needed:**
+- Customer portal is currently down - impacts multiple users
+- Invoice #4521 billing error needs resolution and customer credit
+- Password reset system failure blocks user onboarding
+
+✅ **Recommended Next Steps:**
+1. Address portal/login outage immediately
+2. Investigate billing duplicate charge and process refund
+3. Debug password reset email delivery issue
+4. Schedule feature request review when critical issues resolved
+
+---
+*Last Updated: Today*

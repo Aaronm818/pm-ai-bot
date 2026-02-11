@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PM AI Bot - Meeting Observer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            color: #8892b0;
+            font-size: 1.1rem;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .card h2 {
+            font-size: 1.2rem;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card h2 .icon {
+            font-size: 1.4rem;
+        }
+
+        /* Connection Section */
+        .connection-section {
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 1rem;
+        }
+
+        .input-group input::placeholder {
+            color: #8892b0;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 212, 255, 0.4);
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Status Indicators */
+        .status-bar {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        .status-dot.connected {
+            background: #00ff88;
+            box-shadow: 0 0 10px #00ff88;
+        }
+
+        .status-dot.active {
+            background: #00d4ff;
+            box-shadow: 0 0 10px #00d4ff;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Video Preview */
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            margin-bottom: 20px;
+        }
+
+        .video-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .video-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #666;
+        }
+
+        .video-placeholder .icon {
+            font-size: 4rem;
+            margin-bottom: 10px;
+        }
+
+        /* Audio Meter */
+        .audio-meter-container {
+            margin-bottom: 20px;
+        }
+
+        .audio-meter-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: #8892b0;
+        }
+
+        .audio-meter {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .audio-meter-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88, #00d4ff, #7b2cbf);
+            border-radius: 4px;
+            transition: width 0.1s ease;
+            width: 0%;
+        }
+
+        /* Capture Controls */
+        .capture-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        /* Transcript Section */
+        .transcript-container {
+            height: 300px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .transcript-entry {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .transcript-entry:last-child {
+            border-bottom: none;
+        }
+
+        .transcript-entry .speaker {
+            font-weight: 600;
+            color: #00d4ff;
+            margin-bottom: 4px;
+        }
+
+        .transcript-entry .text {
+            color: #e0e0e0;
+            line-height: 1.5;
+        }
+
+        .transcript-entry .timestamp {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .transcript-entry.ai-response .speaker {
+            color: #7b2cbf;
+        }
+
+        /* Vision Analysis */
+        .vision-panel {
+            margin-top: 20px;
+        }
+
+        .vision-snapshot {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .snapshot-preview {
+            width: 120px;
+            height: 68px;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .snapshot-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .snapshot-info {
+            flex: 1;
+        }
+
+        .snapshot-info .label {
+            font-size: 0.8rem;
+            color: #8892b0;
+        }
+
+        .snapshot-info .value {
+            font-size: 0.9rem;
+            color: #fff;
+        }
+
+        .vision-analysis {
+            background: rgba(123, 44, 191, 0.2);
+            border: 1px solid rgba(123, 44, 191, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        /* Settings Panel */
+        .settings-grid {
+            display: grid;
+            gap: 15px;
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .setting-item label {
+            color: #8892b0;
+        }
+
+        .setting-item select,
+        .setting-item input[type="number"] {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 0.9rem;
+        }
+
+        .setting-item select option {
+            background: #1a1a2e;
+        }
+
+        /* Toggle Switch */
+        .toggle {
+            position: relative;
+            width: 50px;
+            height: 26px;
+        }
+
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 26px;
+            transition: 0.3s;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+        .toggle input:checked + .toggle-slider {
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+        }
+
+        .toggle input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+
+        /* Logs */
+        .logs-container {
+            height: 150px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.8rem;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            color: #8892b0;
+        }
+
+        .log-entry.info { color: #00d4ff; }
+        .log-entry.success { color: #00ff88; }
+        .log-entry.error { color: #e74c3c; }
+        .log-entry.warning { color: #f39c12; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 PM AI Bot - Meeting Observer</h1>
+            <p>Full meeting awareness with video + audio capture</p>
+        </header>
+
+        <div class="main-grid">
+            <!-- Left Column - Main Content -->
+            <div class="left-column">
+                <!-- Connection Card -->
+                <div class="card connection-section">
+                    <h2><span class="icon">🔗</span> Connection</h2>
+                    <div class="input-group">
+                        <input type="text" id="serverUrl" placeholder="Server URL (e.g., https://xxxxx.ngrok-free.dev)" value="">
+                        <button class="btn btn-primary" id="connectBtn" onclick="connectToServer()">
+                            Connect
+                        </button>
+                    </div>
+                    <div class="status-bar">
+                        <div class="status-item">
+                            <div class="status-dot" id="wsStatus"></div>
+                            <span>WebSocket</span>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-dot" id="audioStatus"></div>
+                            <span>Audio Stream</span>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-dot" id="videoStatus"></div>
+                            <span>Video Capture</span>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-dot" id="aiStatus"></div>
+                            <span>AI Connected</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Video Preview Card -->
+                <div class="card">
+                    <h2><span class="icon">🖥️</span> Screen Capture Preview</h2>
+                    <div class="video-container">
+                        <video id="screenPreview" autoplay muted playsinline></video>
+                        <div class="video-placeholder" id="videoPlaceholder">
+                            <div class="icon">📺</div>
+                            <div>Click "Start Screen Capture" to begin</div>
+                        </div>
+                    </div>
+                    
+                    <div class="audio-meter-container">
+                        <div class="audio-meter-label">
+                            <span>Audio Level</span>
+                            <span id="audioLevelText">0%</span>
+                        </div>
+                        <div class="audio-meter">
+                            <div class="audio-meter-fill" id="audioMeterFill"></div>
+                        </div>
+                    </div>
+
+                    <div class="capture-controls">
+                        <button class="btn btn-primary" id="startCaptureBtn" onclick="startScreenCapture()">
+                            🎬 Start Screen Capture
+                        </button>
+                        <button class="btn btn-danger" id="stopCaptureBtn" onclick="stopCapture()" disabled>
+                            ⏹️ Stop Capture
+                        </button>
+                        <button class="btn btn-primary" id="snapshotBtn" onclick="takeSnapshot()" disabled>
+                            📸 Analyze Screen Now
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Transcript Card -->
+                <div class="card">
+                    <h2><span class="icon">📝</span> Live Transcript</h2>
+                    <div class="transcript-container" id="transcriptContainer">
+                        <div class="transcript-entry">
+                            <div class="text" style="color: #666; font-style: italic;">
+                                Transcript will appear here when the meeting starts...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Sidebar -->
+            <div class="right-column">
+                <!-- Vision Analysis Card -->
+                <div class="card vision-panel">
+                    <h2><span class="icon">👁️</span> Vision Analysis</h2>
+                    <div class="vision-snapshot">
+                        <div class="snapshot-preview">
+                            <img id="lastSnapshot" src="" alt="Last snapshot" style="display: none;">
+                            <div id="snapshotPlaceholder" style="display: flex; align-items: center; justify-content: center; height: 100%; color: #666; font-size: 0.8rem;">No snapshot</div>
+                        </div>
+                        <div class="snapshot-info">
+                            <div class="label">Last analyzed</div>
+                            <div class="value" id="lastAnalyzedTime">Never</div>
+                            <div class="label" style="margin-top: 8px;">Interval</div>
+                            <div class="value" id="analysisInterval">Every 5 seconds</div>
+                        </div>
+                    </div>
+                    <div class="vision-analysis" id="visionAnalysis">
+                        Vision analysis will appear here. The AI will identify who's speaking, what's on screen, and meeting context.
+                    </div>
+                </div>
+
+                <!-- Settings Card -->
+                <div class="card">
+                    <h2><span class="icon">⚙️</span> Settings</h2>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <label>Auto-analyze screen</label>
+                            <label class="toggle">
+                                <input type="checkbox" id="autoAnalyze" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <label>Analysis interval (sec)</label>
+                            <input type="number" id="analysisIntervalInput" value="5" min="2" max="30" style="width: 70px;">
+                        </div>
+                        <div class="setting-item">
+                            <label>Wake words</label>
+                            <select id="wakeWordMode">
+                                <option value="heyyy">Hey PM / Project Manager</option>
+                                <option value="always">Always listening</option>
+                                <option value="manual">Manual only</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <label>Vision model</label>
+                            <select id="visionModel">
+                                <option value="gpt-4o">GPT-4o (Azure)</option>
+                                <option value="claude">Claude 3.5 Sonnet</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logs Card -->
+                <div class="card">
+                    <h2><span class="icon">📋</span> Activity Log</h2>
+                    <div class="logs-container" id="logsContainer">
+                        <div class="log-entry info">[System] PM AI Bot initialized</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden canvas for snapshots -->
+    <canvas id="snapshotCanvas" style="display: none;"></canvas>
+
+    <!-- Audio playback for AI responses -->
+    <audio id="aiAudioPlayer" style="display: none;"></audio>
+
+    <script>
+        // ===== Global State =====
+        let ws = null;
+        let mediaStream = null;
+        let audioContext = null;
+        let audioProcessor = null;
+        let analyser = null;
+        let isCapturing = false;
+        let analysisTimer = null;
+        let audioBuffer = [];
+
+        // ===== Logging =====
+        function log(message, type = 'info') {
+            const logsContainer = document.getElementById('logsContainer');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            logsContainer.appendChild(entry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+
+        // ===== Status Updates =====
+        function updateStatus(element, active) {
+            const dot = document.getElementById(element);
+            if (active) {
+                dot.classList.add('connected');
+            } else {
+                dot.classList.remove('connected');
+            }
+        }
+
+        function setStatusActive(element, active) {
+            const dot = document.getElementById(element);
+            if (active) {
+                dot.classList.add('active');
+            } else {
+                dot.classList.remove('active');
+            }
+        }
+
+        // ===== WebSocket Connection =====
+        function connectToServer() {
+            const serverUrl = document.getElementById('serverUrl').value.trim();
+            if (!serverUrl) {
+                log('Please enter a server URL', 'error');
+                return;
+            }
+
+            // Convert HTTP(S) to WS(S)
+            const wsUrl = serverUrl.replace(/^http/, 'ws');
+            log(`Connecting to ${wsUrl}...`);
+
+            try {
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    log('WebSocket connected!', 'success');
+                    updateStatus('wsStatus', true);
+                    document.getElementById('connectBtn').textContent = 'Connected';
+                    document.getElementById('connectBtn').disabled = true;
+                    
+                    // Send identification message
+                    ws.send(JSON.stringify({
+                        type: 'client_hello',
+                        client: 'pm-ai-meeting-observer',
+                        capabilities: ['audio', 'video', 'vision']
+                    }));
+                };
+
+                ws.onmessage = (event) => {
+                    handleServerMessage(event.data);
+                };
+
+                ws.onclose = () => {
+                    log('WebSocket disconnected', 'warning');
+                    updateStatus('wsStatus', false);
+                    updateStatus('aiStatus', false);
+                    document.getElementById('connectBtn').textContent = 'Connect';
+                    document.getElementById('connectBtn').disabled = false;
+                };
+
+                ws.onerror = (error) => {
+                    log('WebSocket error: ' + error.message, 'error');
+                };
+
+            } catch (error) {
+                log('Failed to connect: ' + error.message, 'error');
+            }
+        }
+
+        // ===== Handle Server Messages =====
+        function handleServerMessage(data) {
+            try {
+                // Check if it's binary audio data
+                if (data instanceof Blob) {
+                    playAudioResponse(data);
+                    return;
+                }
+
+                const message = JSON.parse(data);
+
+                switch (message.type) {
+                    case 'connected':
+                        log('Server acknowledged connection', 'success');
+                        updateStatus('aiStatus', true);
+                        break;
+
+                    case 'transcript':
+                        addTranscriptEntry(message.speaker || 'Unknown', message.text, message.timestamp);
+                        break;
+
+                    case 'ai_response':
+                        addTranscriptEntry('PM AI', message.text, new Date().toISOString(), true);
+                        break;
+
+                    case 'audio_response':
+                        // Base64 encoded audio
+                        if (message.audio) {
+                            const audioData = base64ToBlob(message.audio, 'audio/wav');
+                            playAudioResponse(audioData);
+                        }
+                        break;
+
+                    case 'vision_analysis':
+                        updateVisionAnalysis(message.analysis);
+                        break;
+
+                    case 'wake_word_detected':
+                        log('Wake word detected: ' + message.word, 'success');
+                        setStatusActive('aiStatus', true);
+                        setTimeout(() => setStatusActive('aiStatus', false), 2000);
+                        break;
+
+                    case 'error':
+                        log('Server error: ' + message.message, 'error');
+                        break;
+
+                    default:
+                        log('Unknown message type: ' + message.type, 'warning');
+                }
+
+            } catch (error) {
+                // Might be raw audio data
+                log('Received non-JSON data', 'info');
+            }
+        }
+
+        // ===== Screen Capture =====
+        async function startScreenCapture() {
+            try {
+                log('Requesting screen capture with audio...');
+                
+                // Request screen capture with audio
+                mediaStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        cursor: 'always',
+                        displaySurface: 'monitor'
+                    },
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    }
+                });
+
+                // Check if we got audio
+                const audioTracks = mediaStream.getAudioTracks();
+                const videoTracks = mediaStream.getVideoTracks();
+
+                log(`Captured: ${videoTracks.length} video track(s), ${audioTracks.length} audio track(s)`, 'success');
+
+                if (audioTracks.length === 0) {
+                    log('Warning: No audio track captured. Make sure to check "Share audio" when selecting screen.', 'warning');
+                }
+
+                // Show video preview
+                const video = document.getElementById('screenPreview');
+                video.srcObject = mediaStream;
+                document.getElementById('videoPlaceholder').style.display = 'none';
+                updateStatus('videoStatus', true);
+
+                // Set up audio processing
+                if (audioTracks.length > 0) {
+                    setupAudioProcessing(mediaStream);
+                    updateStatus('audioStatus', true);
+                }
+
+                // Update UI
+                isCapturing = true;
+                document.getElementById('startCaptureBtn').disabled = true;
+                document.getElementById('stopCaptureBtn').disabled = false;
+                document.getElementById('snapshotBtn').disabled = false;
+
+                // Handle stream ending (user clicks "Stop sharing")
+                mediaStream.getVideoTracks()[0].onended = () => {
+                    log('Screen sharing stopped by user');
+                    stopCapture();
+                };
+
+                // Start automatic vision analysis if enabled
+                if (document.getElementById('autoAnalyze').checked) {
+                    startAutoAnalysis();
+                }
+
+                log('Screen capture started successfully!', 'success');
+
+            } catch (error) {
+                log('Failed to start screen capture: ' + error.message, 'error');
+                console.error(error);
+            }
+        }
+
+        // ===== Audio Processing =====
+        function setupAudioProcessing(stream) {
+            audioContext = new AudioContext({ sampleRate: 24000 });
+            const source = audioContext.createMediaStreamSource(stream);
+            
+            // Create analyser for visualization
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+
+            // Create script processor for sending audio
+            audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+            
+            audioProcessor.onaudioprocess = (event) => {
+                if (!isCapturing || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+                const inputData = event.inputBuffer.getChannelData(0);
+                
+                // Convert to 16-bit PCM
+                const pcmData = new Int16Array(inputData.length);
+                for (let i = 0; i < inputData.length; i++) {
+                    pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+                }
+
+                // Send audio to server
+                ws.send(JSON.stringify({
+                    type: 'audio',
+                    audio: arrayBufferToBase64(pcmData.buffer),
+                    sampleRate: audioContext.sampleRate
+                }));
+            };
+
+            source.connect(audioProcessor);
+            audioProcessor.connect(audioContext.destination);
+
+            // Start audio level visualization
+            updateAudioMeter();
+            
+            log('Audio processing initialized at ' + audioContext.sampleRate + 'Hz');
+        }
+
+        function updateAudioMeter() {
+            if (!analyser || !isCapturing) return;
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(dataArray);
+
+            // Calculate average level
+            const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+            const level = Math.min(100, (average / 128) * 100);
+
+            document.getElementById('audioMeterFill').style.width = level + '%';
+            document.getElementById('audioLevelText').textContent = Math.round(level) + '%';
+
+            requestAnimationFrame(updateAudioMeter);
+        }
+
+        // ===== Vision Analysis =====
+        function startAutoAnalysis() {
+            const interval = parseInt(document.getElementById('analysisIntervalInput').value) * 1000;
+            document.getElementById('analysisInterval').textContent = `Every ${interval/1000} seconds`;
+            
+            analysisTimer = setInterval(() => {
+                if (isCapturing && document.getElementById('autoAnalyze').checked) {
+                    takeSnapshot();
+                }
+            }, interval);
+            
+            log(`Auto-analysis started (every ${interval/1000}s)`);
+        }
+
+        function stopAutoAnalysis() {
+            if (analysisTimer) {
+                clearInterval(analysisTimer);
+                analysisTimer = null;
+                log('Auto-analysis stopped');
+            }
+        }
+
+        async function takeSnapshot() {
+            if (!mediaStream) return;
+
+            const video = document.getElementById('screenPreview');
+            const canvas = document.getElementById('snapshotCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Set canvas size to video size
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // Draw current frame
+            ctx.drawImage(video, 0, 0);
+
+            // Convert to base64
+            const imageData = canvas.toDataURL('image/jpeg', 0.8);
+            
+            // Update preview
+            const snapshotImg = document.getElementById('lastSnapshot');
+            snapshotImg.src = imageData;
+            snapshotImg.style.display = 'block';
+            document.getElementById('snapshotPlaceholder').style.display = 'none';
+            document.getElementById('lastAnalyzedTime').textContent = new Date().toLocaleTimeString();
+
+            // Send to server for analysis
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'vision_frame',
+                    image: imageData,
+                    timestamp: new Date().toISOString(),
+                    model: document.getElementById('visionModel').value
+                }));
+                log('Snapshot sent for analysis');
+            }
+        }
+
+        function updateVisionAnalysis(analysis) {
+            document.getElementById('visionAnalysis').textContent = analysis;
+            log('Vision analysis updated', 'success');
+        }
+
+        // ===== Stop Capture =====
+        function stopCapture() {
+            isCapturing = false;
+
+            // Stop all tracks
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+
+            // Close audio context
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+
+            // Stop auto-analysis
+            stopAutoAnalysis();
+
+            // Reset UI
+            document.getElementById('screenPreview').srcObject = null;
+            document.getElementById('videoPlaceholder').style.display = 'flex';
+            document.getElementById('startCaptureBtn').disabled = false;
+            document.getElementById('stopCaptureBtn').disabled = true;
+            document.getElementById('snapshotBtn').disabled = true;
+            document.getElementById('audioMeterFill').style.width = '0%';
+            document.getElementById('audioLevelText').textContent = '0%';
+
+            updateStatus('videoStatus', false);
+            updateStatus('audioStatus', false);
+
+            log('Capture stopped');
+        }
+
+        // ===== Transcript =====
+        function addTranscriptEntry(speaker, text, timestamp, isAI = false) {
+            const container = document.getElementById('transcriptContainer');
+            
+            // Remove placeholder if present
+            if (container.querySelector('.text[style*="italic"]')) {
+                container.innerHTML = '';
+            }
+
+            const entry = document.createElement('div');
+            entry.className = 'transcript-entry' + (isAI ? ' ai-response' : '');
+            
+            const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+            
+            entry.innerHTML = `
+                <div class="speaker">${speaker}</div>
+                <div class="text">${text}</div>
+                <div class="timestamp">${time}</div>
+            `;
+
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ===== Audio Playback =====
+        function playAudioResponse(audioBlob) {
+            const audioPlayer = document.getElementById('aiAudioPlayer');
+            const audioUrl = URL.createObjectURL(audioBlob);
+            audioPlayer.src = audioUrl;
+            audioPlayer.play()
+                .then(() => log('Playing AI response'))
+                .catch(err => log('Audio playback error: ' + err.message, 'error'));
+        }
+
+        // ===== Utility Functions =====
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        }
+
+        function base64ToBlob(base64, mimeType) {
+            const byteCharacters = atob(base64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            return new Blob([byteArray], { type: mimeType });
+        }
+
+        // ===== Settings Handlers =====
+        document.getElementById('autoAnalyze').addEventListener('change', (e) => {
+            if (e.target.checked && isCapturing) {
+                startAutoAnalysis();
+            } else {
+                stopAutoAnalysis();
+            }
+        });
+
+        document.getElementById('analysisIntervalInput').addEventListener('change', (e) => {
+            if (isCapturing && document.getElementById('autoAnalyze').checked) {
+                stopAutoAnalysis();
+                startAutoAnalysis();
+            }
+        });
+
+        // ===== Initialization =====
+        window.onload = () => {
+            log('PM AI Meeting Observer loaded');
+            
+            // Check for required APIs
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                log('Screen capture not supported in this browser', 'error');
+                document.getElementById('startCaptureBtn').disabled = true;
+            }
+
+            // Try to restore last used server URL
+            const savedUrl = localStorage.getItem('pmAiServerUrl');
+            if (savedUrl) {
+                document.getElementById('serverUrl').value = savedUrl;
+            }
+        };
+
+        // Save server URL when connecting
+        const originalConnect = connectToServer;
+        connectToServer = function() {
+            const url = document.getElementById('serverUrl').value.trim();
+            if (url) {
+                localStorage.setItem('pmAiServerUrl', url);
+            }
+            originalConnect();
+        };
+    </script>
+</body>
+</html>

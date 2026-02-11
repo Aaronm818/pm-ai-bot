@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PM AI Bot - Teams Meeting Client</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        h1 {
+            color: #00d4ff;
+            margin-bottom: 5px;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+        }
+        .section {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #0f3460;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #00d4ff;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #aaa;
+            font-size: 0.9em;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #00d4ff;
+            color: #1a1a2e;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: #00b8e6;
+            transform: translateY(-1px);
+        }
+        .btn-danger {
+            background: #e94560;
+            color: #fff;
+        }
+        .btn-danger:hover:not(:disabled) {
+            background: #d63850;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+        .status-disconnected {
+            background: rgba(233, 69, 96, 0.2);
+            border: 1px solid #e94560;
+        }
+        .status-connecting {
+            background: rgba(255, 193, 7, 0.2);
+            border: 1px solid #ffc107;
+        }
+        .status-connected {
+            background: rgba(0, 212, 255, 0.2);
+            border: 1px solid #00d4ff;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .status-disconnected .status-dot { background: #e94560; }
+        .status-connecting .status-dot { background: #ffc107; animation: pulse 1s infinite; }
+        .status-connected .status-dot { background: #00d4ff; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .transcript-box {
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .transcript-entry {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #0f3460;
+        }
+        .transcript-entry:last-child {
+            border-bottom: none;
+        }
+        .transcript-speaker {
+            color: #00d4ff;
+            font-weight: 600;
+        }
+        .transcript-ai {
+            color: #4ade80;
+        }
+        .transcript-time {
+            color: #666;
+            font-size: 0.85em;
+            margin-left: 10px;
+        }
+        .log-box {
+            background: #0d1117;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            color: #8b949e;
+        }
+        .log-entry.error { color: #f85149; }
+        .log-entry.success { color: #4ade80; }
+        .log-entry.info { color: #58a6ff; }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        @media (max-width: 600px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+        .help-text {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: -10px;
+            margin-bottom: 15px;
+        }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>🤖 PM AI Bot</h1>
+    <p class="subtitle">Teams Meeting Client - Say "Hey PM" to activate</p>
+
+    <!-- Connection Status -->
+    <div class="section">
+        <div id="callStatus" class="status status-disconnected">
+            <span class="status-dot"></span>
+            <span id="callStatusText">Not connected to meeting</span>
+        </div>
+        <div id="wsStatus" class="status status-disconnected">
+            <span class="status-dot"></span>
+            <span id="wsStatusText">WebSocket: Disconnected</span>
+        </div>
+    </div>
+
+    <!-- Server Configuration -->
+    <div class="section">
+        <h2>⚙️ Server Configuration</h2>
+        <label for="serverUrl">Server URL (ngrok)</label>
+        <input type="text" id="serverUrl" placeholder="https://xxxx-xx-xx-xx-xx.ngrok-free.dev" value="">
+        <p class="help-text">Your ngrok URL - the HTML client will connect to this server</p>
+    </div>
+
+    <!-- Join Meeting -->
+    <div class="section">
+        <h2>📅 Join Teams Meeting</h2>
+        <label for="meetingLink">Teams Meeting Link</label>
+        <textarea id="meetingLink" rows="3" placeholder="Paste full Teams meeting link here...&#10;https://teams.microsoft.com/l/meetup-join/..."></textarea>
+        
+        <div class="button-group">
+            <button id="joinBtn" class="btn-primary" onclick="joinMeeting()">Join Meeting</button>
+            <button id="leaveBtn" class="btn-danger" onclick="leaveMeeting()" disabled>Leave Meeting</button>
+        </div>
+    </div>
+
+    <!-- Live Transcript -->
+    <div class="section">
+        <h2>📝 Live Transcript</h2>
+        <div id="transcript" class="transcript-box">
+            <div style="color: #666; font-style: italic;">Transcript will appear here when connected...</div>
+        </div>
+    </div>
+
+    <!-- Debug Log -->
+    <div class="section">
+        <h2>🔧 Debug Log</h2>
+        <div id="log" class="log-box"></div>
+        <button onclick="document.getElementById('log').innerHTML=''" style="margin-top: 10px; background: #333; color: #888; font-size: 12px; padding: 8px 16px;">Clear Log</button>
+    </div>
+
+    <!-- ACS Calling SDK - Official Microsoft bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/@azure/communication-common@2.3.0/dist/index.js"></script>
+    <script src="https://acscallclientbundle.blob.core.windows.net/bundlecontainer/AzureCommunicationCalling.min.js"></script>
+    
+    <script>
+        // Wait for SDK to be ready
+        window.addEventListener('load', function() {
+            if (window.AzureCommunicationCalling) {
+                window.acsLoaded = true;
+                console.log('ACS SDK loaded from Microsoft CDN');
+            }
+        });
+    </script>
+    
+    <script>
+        // State
+        let callAgent = null;
+        let call = null;
+        let webSocket = null;
+        let audioContext = null;
+        let mediaStreamSource = null;
+        let scriptProcessor = null;
+
+        // DOM Elements
+        const logEl = document.getElementById('log');
+        const transcriptEl = document.getElementById('transcript');
+        const callStatusEl = document.getElementById('callStatus');
+        const callStatusTextEl = document.getElementById('callStatusText');
+        const wsStatusEl = document.getElementById('wsStatus');
+        const wsStatusTextEl = document.getElementById('wsStatusText');
+        const joinBtn = document.getElementById('joinBtn');
+        const leaveBtn = document.getElementById('leaveBtn');
+
+        // Logging
+        function log(message, type = '') {
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${time}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[${type || 'log'}] ${message}`);
+        }
+
+        function addTranscript(speaker, text, isAI = false) {
+            // Clear placeholder
+            if (transcriptEl.querySelector('div[style]')) {
+                transcriptEl.innerHTML = '';
+            }
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'transcript-entry';
+            entry.innerHTML = `
+                <span class="transcript-speaker ${isAI ? 'transcript-ai' : ''}">${speaker}:</span>
+                <span class="transcript-time">${time}</span>
+                <div>${text}</div>
+            `;
+            transcriptEl.appendChild(entry);
+            transcriptEl.scrollTop = transcriptEl.scrollHeight;
+        }
+
+        function setCallStatus(status, text) {
+            callStatusEl.className = `status status-${status}`;
+            callStatusTextEl.textContent = text;
+        }
+
+        function setWsStatus(status, text) {
+            wsStatusEl.className = `status status-${status}`;
+            wsStatusTextEl.textContent = text;
+        }
+
+        // Get ACS Token from server
+        async function getToken(serverUrl) {
+            log('Fetching ACS token from server...', 'info');
+            const response = await fetch(`${serverUrl}/acs/token`, {
+                headers: {
+                    'ngrok-skip-browser-warning': 'true'
+                }
+            });
+            if (!response.ok) {
+                throw new Error(`Failed to get token: ${response.status}`);
+            }
+            const data = await response.json();
+            log(`Token received for user: ${data.userId}`, 'success');
+            return data;
+        }
+
+        // Connect WebSocket to server
+        function connectWebSocket(serverUrl) {
+            const wsUrl = serverUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/ws';
+            log(`Connecting WebSocket to ${wsUrl}...`, 'info');
+            
+            webSocket = new WebSocket(wsUrl);
+            
+            webSocket.onopen = () => {
+                log('WebSocket connected!', 'success');
+                setWsStatus('connected', 'WebSocket: Connected');
+            };
+            
+            webSocket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleServerMessage(data);
+                } catch (e) {
+                    log(`WebSocket message: ${event.data}`, 'info');
+                }
+            };
+            
+            webSocket.onerror = (error) => {
+                log(`WebSocket error: ${error}`, 'error');
+                setWsStatus('disconnected', 'WebSocket: Error');
+            };
+            
+            webSocket.onclose = () => {
+                log('WebSocket disconnected', 'info');
+                setWsStatus('disconnected', 'WebSocket: Disconnected');
+            };
+        }
+
+        // Handle messages from server
+        function handleServerMessage(data) {
+            switch (data.type) {
+                case 'transcript':
+                    addTranscript('Speaker', data.text);
+                    break;
+                case 'ai_response':
+                    addTranscript('PM AI', data.text, true);
+                    break;
+                case 'wake_word_detected':
+                    log('Wake word detected! AI is responding...', 'success');
+                    break;
+                case 'error':
+                    log(`Server error: ${data.message}`, 'error');
+                    break;
+                default:
+                    log(`Server: ${JSON.stringify(data)}`, 'info');
+            }
+        }
+
+        // Join Teams Meeting
+        async function joinMeeting() {
+            const serverUrl = document.getElementById('serverUrl').value.trim();
+            const meetingLink = document.getElementById('meetingLink').value.trim();
+
+            if (!serverUrl) {
+                log('Please enter the server URL', 'error');
+                return;
+            }
+            if (!meetingLink) {
+                log('Please enter a Teams meeting link', 'error');
+                return;
+            }
+
+            try {
+                joinBtn.disabled = true;
+                setCallStatus('connecting', 'Connecting...');
+
+                // Get token from server
+                const tokenData = await getToken(serverUrl);
+                
+                // Connect WebSocket
+                connectWebSocket(serverUrl);
+
+                // Initialize ACS Call Client
+                log('Initializing ACS Call Client...', 'info');
+                
+                // Check if SDK loaded
+                if (!window.AzureCommunicationCalling) {
+                    throw new Error('ACS SDK not loaded. Please refresh the page and wait a moment before joining.');
+                }
+                
+                const callClient = new window.AzureCommunicationCalling.CallClient();
+                const tokenCredential = new window.AzureCommunicationCommon.AzureCommunicationTokenCredential(tokenData.token);
+                
+                callAgent = await callClient.createCallAgent(tokenCredential, {
+                    displayName: 'PM AI Bot'
+                });
+                log('Call agent created', 'success');
+
+                // Join the Teams meeting
+                log('Joining Teams meeting...', 'info');
+                const locator = { meetingLink: meetingLink };
+                
+                call = callAgent.join(locator, {
+                    audioOptions: {
+                        muted: false  // We need to hear the meeting
+                    }
+                });
+
+                // Handle call state changes
+                call.on('stateChanged', () => {
+                    log(`Call state: ${call.state}`, 'info');
+                    
+                    switch (call.state) {
+                        case 'Connected':
+                            setCallStatus('connected', `Connected to meeting`);
+                            leaveBtn.disabled = false;
+                            startAudioCapture();
+                            break;
+                        case 'Disconnected':
+                            setCallStatus('disconnected', 'Disconnected from meeting');
+                            leaveBtn.disabled = true;
+                            joinBtn.disabled = false;
+                            stopAudioCapture();
+                            break;
+                        case 'Connecting':
+                        case 'Ringing':
+                            setCallStatus('connecting', call.state + '...');
+                            break;
+                    }
+                });
+
+                // Handle remote participants
+                call.on('remoteParticipantsUpdated', (e) => {
+                    log(`Participants updated: +${e.added.length} -${e.removed.length}`, 'info');
+                    e.added.forEach(p => {
+                        log(`Participant joined: ${p.displayName || 'Unknown'}`, 'success');
+                    });
+                });
+
+            } catch (error) {
+                log(`Error joining meeting: ${error.message}`, 'error');
+                setCallStatus('disconnected', 'Failed to connect');
+                joinBtn.disabled = false;
+            }
+        }
+
+        // Leave Meeting
+        async function leaveMeeting() {
+            try {
+                if (call) {
+                    log('Leaving meeting...', 'info');
+                    await call.hangUp();
+                }
+                if (webSocket) {
+                    webSocket.close();
+                }
+                stopAudioCapture();
+            } catch (error) {
+                log(`Error leaving: ${error.message}`, 'error');
+            }
+        }
+
+        // Start capturing audio and streaming to server
+        async function startAudioCapture() {
+            try {
+                log('Starting audio capture...', 'info');
+                
+                // Get microphone stream (this will capture what we hear in the meeting)
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 24000
+                    } 
+                });
+                
+                audioContext = new AudioContext({ sampleRate: 24000 });
+                mediaStreamSource = audioContext.createMediaStreamSource(stream);
+                
+                // Create script processor to capture audio chunks
+                scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+                
+                scriptProcessor.onaudioprocess = (event) => {
+                    if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+                        const inputData = event.inputBuffer.getChannelData(0);
+                        
+                        // Convert float32 to int16
+                        const int16Data = new Int16Array(inputData.length);
+                        for (let i = 0; i < inputData.length; i++) {
+                            int16Data[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+                        }
+                        
+                        // Convert to base64 and send
+                        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(int16Data.buffer)));
+                        webSocket.send(JSON.stringify({
+                            type: 'audio',
+                            data: base64Audio
+                        }));
+                    }
+                };
+                
+                mediaStreamSource.connect(scriptProcessor);
+                scriptProcessor.connect(audioContext.destination);
+                
+                log('Audio capture started - streaming to server', 'success');
+                
+            } catch (error) {
+                log(`Audio capture error: ${error.message}`, 'error');
+            }
+        }
+
+        // Stop audio capture
+        function stopAudioCapture() {
+            if (scriptProcessor) {
+                scriptProcessor.disconnect();
+                scriptProcessor = null;
+            }
+            if (mediaStreamSource) {
+                mediaStreamSource.disconnect();
+                mediaStreamSource = null;
+            }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            log('Audio capture stopped', 'info');
+        }
+
+        // Initialize
+        log('PM AI Bot Teams Client ready', 'success');
+        log('Enter your ngrok URL and Teams meeting link to connect', 'info');
+        
+        // Check if ACS SDK loaded
+        setTimeout(() => {
+            if (window.AzureCommunicationCalling) {
+                log('ACS Calling SDK loaded', 'success');
+            } else {
+                log('Warning: ACS SDK may not have loaded. Try refreshing.', 'error');
+            }
+        }, 2000);
+    </script>
+</body>
+</html>

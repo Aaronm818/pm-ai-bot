@@ -7,7 +7,6 @@ import {
   DtmfTone,
   StartMediaStreamingOptions,
   StopMediaStreamingOptions,
-  TextSource,
 } from '@azure/communication-call-automation';
 import {
   CommunicationIdentifier,
@@ -29,6 +28,7 @@ import {
 } from './call-events.types';
 import { WebSocketService } from '../websocket/websocket.service';
 import axios from 'axios';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class CallAutomationService {
@@ -36,29 +36,31 @@ export class CallAutomationService {
   private callAutomationClient: CallAutomationClient;
   private activeCalls: Map<string, CallSession> = new Map();
   private callConnections: Map<string, CallConnection> = new Map();
-  private audioStreamingSessions: Map<string, AudioStreamingSession> =
-    new Map();
+  private audioStreamingSessions: Map<string, AudioStreamingSession> = new Map();
+  private acsEndpoint: string;
+  private acsAccessKey: string;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly webSocketService: WebSocketService,
   ) {
-    const connectionString = this.configService.get<string>(
-      'ACS_CONNECTION_STRING',
-    );
-
+    const connectionString = this.configService.get<string>('ACS_CONNECTION_STRING');
     if (!connectionString) {
       throw new Error('ACS_CONNECTION_STRING is required');
     }
-
     this.callAutomationClient = new CallAutomationClient(connectionString);
-
+    
+    const endpointMatch = connectionString.match(/endpoint=([^;]+)/i);
+    const accessKeyMatch = connectionString.match(/accesskey=([^;]+)/i);
+    this.acsEndpoint = endpointMatch ? endpointMatch[1] : '';
+    this.acsAccessKey = accessKeyMatch ? accessKeyMatch[1] : '';
+    
     this.logger.log('Call Automation Service initialized');
+    this.logger.log(`ACS Endpoint: ${this.acsEndpoint}`);
   }
 
   async handleIncomingCall(eventData: AcsIncomingCallEventData): Promise<void> {
     this.logger.log(`Incoming call: ${eventData.serverCallId}`);
-
     const callSession: CallSession = {
       callConnectionId: eventData.callConnectionId,
       serverCallId: eventData.serverCallId,
@@ -70,67 +72,37 @@ export class CallAutomationService {
       from: eventData.from,
       to: eventData.to,
     };
-
     this.activeCalls.set(eventData.serverCallId, callSession);
-
     try {
-      await this.answerCall(
-        eventData.incomingCallContext,
-        eventData.serverCallId,
-      );
+      await this.answerCall(eventData.incomingCallContext, eventData.serverCallId);
     } catch (error) {
-      this.logger.error(
-        `Failed to answer call ${eventData.callConnectionId}:`,
-        error,
-      );
+      this.logger.error(`Failed to answer call ${eventData.callConnectionId}:`, error);
       this.updateCallState(eventData.callConnectionId, 'disconnected');
     }
   }
 
-  private async answerCall(
-    incomingCallContext: string,
-    serverCallId: string,
-  ): Promise<void> {
+  private async answerCall(incomingCallContext: string, serverCallId: string): Promise<void> {
     try {
       this.logger.log(`Answering call: ${serverCallId}`);
-
-      const baseUrl = this.configService.get<string>(
-        'BASE_URL',
-        'http://localhost:3000',
-      );
-
-      // Create media streaming configuration for answer call
+      const baseUrl = this.configService.get<string>('BASE_URL', 'http://localhost:3000');
       const mediaStreamingConfig = this.createMediaStreamingConfig(baseUrl, serverCallId);
-
-      // Answer call with media streaming options configured
       const answerCallResult = await this.callAutomationClient.answerCall(
         incomingCallContext,
         `${baseUrl}/acs/events`,
-        {
-          mediaStreamingOptions: mediaStreamingConfig
-        },
+        { mediaStreamingOptions: mediaStreamingConfig },
       );
-
       const callConnection = answerCallResult.callConnection;
       this.callConnections.set(serverCallId, callConnection);
-
-      // Initialize audio streaming session
       const audioSession: AudioStreamingSession = {
         serverCallId,
-        callConnectionId:
-          answerCallResult.callConnectionProperties.callConnectionId,
+        callConnectionId: answerCallResult.callConnectionProperties.callConnectionId,
         isStreaming: false,
       };
       this.audioStreamingSessions.set(serverCallId, audioSession);
-
       this.logger.log(`Call answered successfully: ${serverCallId}`);
       this.updateCallState(serverCallId, 'answered');
-
-      // Wait 3.5 seconds then send audio tone
       setTimeout(async () => {
         await this.sendAudioTone(serverCallId, DEFAULT_DTMF_CONFIG);
-
-        // Wait additional 1 second after sending audio tone, then start audio streaming
         setTimeout(async () => {
           await this.startAudioStreaming(serverCallId);
         }, DEFAULT_MEDIA_STREAMING_CONFIG.startDelayMs);
@@ -139,163 +111,86 @@ export class CallAutomationService {
       this.logger.error(`Failed to answer call ${serverCallId}:`, error);
       throw error;
     }
-  } // Send DTMF tone to the call
-  async sendAudioTone(
-    serverCallId: string,
-    dtmfConfig: DtmfToneConfig = DEFAULT_DTMF_CONFIG,
-  ): Promise<void> {
+  }
+
+  async sendAudioTone(serverCallId: string, dtmfConfig: DtmfToneConfig = DEFAULT_DTMF_CONFIG): Promise<void> {
     const callConnection = this.callConnections.get(serverCallId);
     const callSession = this.activeCalls.get(serverCallId);
-
     if (!callConnection) {
       this.logger.warn(`Call connection not found for ${serverCallId}`);
       return;
     }
-
     if (!callSession || !callSession.from) {
-      this.logger.warn(
-        `Call session or caller information not found for ${serverCallId}`,
-      );
+      this.logger.warn(`Call session or caller information not found for ${serverCallId}`);
       return;
     }
-
-    // Log the actual structure of the from identifier for debugging
-    this.logger.log(
-      'DEBUG: callSession.from structure:',
-      JSON.stringify(callSession.from, null, 2),
-    );
-
     try {
-      this.logger.log(
-        `Sending DTMF tone "${dtmfConfig.tone}" to call ${serverCallId}`,
-      );
-
+      this.logger.log(`Sending DTMF tone "${dtmfConfig.tone}" to call ${serverCallId}`);
       const callMedia: CallMedia = callConnection.getCallMedia();
-
-      // Convert string tone to DtmfTone enum
       const dtmfTone = this.stringToDtmfTone(dtmfConfig.tone);
-
-      // Send DTMF tone to the caller
-      try {
-        // Prepare the target identifier for DTMF sending
-        const targetIdentifier = this.prepareDtmfTarget(callSession.from);
-        if (!targetIdentifier) {
-          throw new Error(
-            `Unsupported communication identifier type for DTMF: ${JSON.stringify(callSession.from)}`,
-          );
-        }
-
-        await callMedia.sendDtmfTones([dtmfTone], targetIdentifier);
-      } catch (dtmfError) {
-        this.logger.error(
-          `Failed to send DTMF tone "${dtmfConfig.tone}" to call ${serverCallId}:`,
-          dtmfError,
-        );
-        // Log more details about the identifier for debugging
-        this.logger.error(
-          'Identifier details:',
-          JSON.stringify(callSession.from, null, 2),
-        );
-        throw dtmfError;
+      const targetIdentifier = this.prepareDtmfTarget(callSession.from);
+      if (!targetIdentifier) {
+        throw new Error(`Unsupported communication identifier type for DTMF`);
       }
-
-      this.logger.log(
-        `DTMF tone "${dtmfConfig.tone}" sent successfully to call ${serverCallId}`,
-      );
+      await callMedia.sendDtmfTones([dtmfTone], targetIdentifier);
+      this.logger.log(`DTMF tone "${dtmfConfig.tone}" sent successfully to call ${serverCallId}`);
     } catch (error) {
-      this.logger.error(
-        `Failed to send DTMF tone to call ${serverCallId}:`,
-        error,
-      );
+      this.logger.error(`Failed to send DTMF tone to call ${serverCallId}:`, error);
     }
   }
 
-  // Send text-to-speech audio to the call using OpenAI TTS API and WebSocket
-  async sendTextToSpeech(
-    serverCallId: string,
-    ttsConfig: TextToSpeechConfig = DEFAULT_TTS_CONFIG,
-  ): Promise<void> {
+  async sendTextToSpeech(serverCallId: string, ttsConfig: TextToSpeechConfig = DEFAULT_TTS_CONFIG): Promise<void> {
     const callConnection = this.callConnections.get(serverCallId);
     const callSession = this.activeCalls.get(serverCallId);
-
     if (!callConnection) {
       this.logger.warn(`Call connection not found for ${serverCallId}`);
       return;
     }
-
     if (!callSession) {
       this.logger.warn(`Call session not found for ${serverCallId}`);
       return;
     }
-
     try {
-      this.logger.log(
-        `Generating text-to-speech using OpenAI for call ${serverCallId}: "${ttsConfig.text}"`,
-      );
-
-      // Get OpenAI API key from environment
+      this.logger.log(`Generating text-to-speech for call ${serverCallId}: "${ttsConfig.text}"`);
       const openaiApiKey = this.configService.get<string>('OPENAI_API_KEY');
       if (!openaiApiKey) {
         throw new Error('OPENAI_API_KEY is not configured');
       }
-      const openaiTtsEndpoint = this.configService.get<string>(
-        'OPENAI_TTS_ENDPOINT',
-      );
+      const openaiTtsEndpoint = this.configService.get<string>('OPENAI_TTS_ENDPOINT');
       if (!openaiTtsEndpoint) {
         throw new Error('OPENAI_TTS_ENDPOINT is not configured');
       }
-
-      // Call OpenAI TTS API
       const ttsResponse = await axios.post(
         openaiTtsEndpoint,
         {
           model: "gpt-4o-mini-tts",
           input: ttsConfig.text,
           voice: this.mapVoiceToOpenAI(ttsConfig.voice || 'en-US-JennyNeural'),
-          response_format: 'wav', // Use WAV format for better compatibility
+          response_format: 'wav',
         },
         {
           headers: {
             'Authorization': `Bearer ${openaiApiKey}`,
             'Content-Type': 'application/json',
           },
-          responseType: 'arraybuffer', // Get binary data
+          responseType: 'arraybuffer',
         },
       );
-
-      // Convert binary audio data to base64
       const audioBuffer = Buffer.from(ttsResponse.data);
       const audioBase64 = audioBuffer.toString('base64');
-
-      this.logger.log(
-        `Generated audio from OpenAI TTS, size: ${audioBuffer.length} bytes`,
-      );
-
-      // Send audio through WebSocket to the call
-      const success = this.webSocketService.sendAudioToAcsClient(
-        serverCallId,
-        audioBase64,
-      );
-
+      this.logger.log(`Generated audio from OpenAI TTS, size: ${audioBuffer.length} bytes`);
+      const success = this.webSocketService.sendAudioToAcsClient(serverCallId, audioBase64);
       if (success) {
-        this.logger.log(
-          `Text-to-speech audio sent successfully via WebSocket to call ${serverCallId}`,
-        );
+        this.logger.log(`Text-to-speech audio sent successfully via WebSocket to call ${serverCallId}`);
       } else {
-        this.logger.warn(
-          `Failed to send audio via WebSocket - no active connection for ${serverCallId}`,
-        );
+        this.logger.warn(`Failed to send audio via WebSocket - no active connection for ${serverCallId}`);
       }
     } catch (error) {
-      this.logger.error(
-        `Failed to generate or send text-to-speech to call ${serverCallId}:`,
-        error,
-      );
+      this.logger.error(`Failed to generate or send text-to-speech to call ${serverCallId}:`, error);
       throw error;
     }
   }
 
-  // Map Azure TTS voice names to OpenAI TTS voices
   private mapVoiceToOpenAI(azureVoice: string): string {
     const voiceMap: { [key: string]: string } = {
       'en-US-JennyNeural': 'alloy',
@@ -304,177 +199,61 @@ export class CallAutomationService {
       'en-US-DavisNeural': 'onyx',
       'en-US-AmberNeural': 'nova',
       'en-US-AnaNeural': 'shimmer',
-      'en-GB-SoniaNeural': 'alloy',
-      'en-GB-RyanNeural': 'echo',
-      'en-AU-NatashaNeural': 'fable',
-      'en-AU-WilliamNeural': 'onyx',
-      'fr-FR-DeniseNeural': 'nova',
-      'fr-FR-HenriNeural': 'echo',
-      'de-DE-KatjaNeural': 'shimmer',
-      'de-DE-ConradNeural': 'onyx',
-      'es-ES-ElviraNeural': 'nova',
-      'es-ES-AlvaroNeural': 'echo',
-      'it-IT-ElsaNeural': 'alloy',
-      'it-IT-DiegoNeural': 'onyx',
-      'pt-BR-FranciscaNeural': 'fable',
-      'pt-BR-AntonioNeural': 'echo',
-      'ja-JP-NanamiNeural': 'shimmer',
-      'ja-JP-KeitaNeural': 'onyx',
-      'ko-KR-SunHiNeural': 'nova',
-      'ko-KR-InJoonNeural': 'echo',
-      'zh-CN-XiaoxiaoNeural': 'alloy',
-      'zh-CN-YunyangNeural': 'onyx',
     };
-
-    return voiceMap[azureVoice] || 'alloy'; // Default to 'alloy' if not found
+    return voiceMap[azureVoice] || 'alloy';
   }
 
-  // Convert string to DtmfTone enum
   private stringToDtmfTone(tone: string): DtmfTone {
     switch (tone) {
-      case '0':
-        return DtmfTone.Zero;
-      case '1':
-        return DtmfTone.One;
-      case '2':
-        return DtmfTone.Two;
-      case '3':
-        return DtmfTone.Three;
-      case '4':
-        return DtmfTone.Four;
-      case '5':
-        return DtmfTone.Five;
-      case '6':
-        return DtmfTone.Six;
-      case '7':
-        return DtmfTone.Seven;
-      case '8':
-        return DtmfTone.Eight;
-      case '9':
-        return DtmfTone.Nine;
-      case '*':
-        return DtmfTone.Asterisk;
-      case '#':
-        return DtmfTone.Pound;
-      case 'A':
-        return DtmfTone.A;
-      case 'B':
-        return DtmfTone.B;
-      case 'C':
-        return DtmfTone.C;
-      case 'D':
-        return DtmfTone.D;
-      default:
-        this.logger.warn(`Unknown DTMF tone: ${tone}, defaulting to tone "1"`);
-        return DtmfTone.One;
+      case '0': return DtmfTone.Zero;
+      case '1': return DtmfTone.One;
+      case '2': return DtmfTone.Two;
+      case '3': return DtmfTone.Three;
+      case '4': return DtmfTone.Four;
+      case '5': return DtmfTone.Five;
+      case '6': return DtmfTone.Six;
+      case '7': return DtmfTone.Seven;
+      case '8': return DtmfTone.Eight;
+      case '9': return DtmfTone.Nine;
+      case '*': return DtmfTone.Asterisk;
+      case '#': return DtmfTone.Pound;
+      default: return DtmfTone.One;
     }
   }
 
-  // Prepare communication identifier for DTMF target
-  private prepareDtmfTarget(
-    identifier: CommunicationIdentifier,
-  ): CommunicationIdentifier | null {
-    this.logger.log(
-      'Preparing DTMF target from identifier:',
-      JSON.stringify(identifier, null, 2),
-    );
-
-    // Check the type of identifier and prepare accordingly
-    if (isPhoneNumberIdentifier(identifier)) {
-      // Return the phone number identifier as-is
-      this.logger.log('Identifier is PhoneNumberIdentifier');
-      return identifier;
-    } else if (isCommunicationUserIdentifier(identifier)) {
-      // Return the communication user identifier as-is
-      this.logger.log('Identifier is CommunicationUserIdentifier');
-      return identifier;
-    } else if (isMicrosoftTeamsUserIdentifier(identifier)) {
-      // Return the Teams user identifier as-is
-      this.logger.log('Identifier is MicrosoftTeamsUserIdentifier');
-      return identifier;
-    } else if (isUnknownIdentifier(identifier)) {
-      this.logger.warn(
-        'Received unknown identifier type for DTMF target:',
-        identifier,
-      );
-      // Try to return as-is, let the SDK handle it
-      return identifier;
-    } else {
-      // Handle the specific structure we're receiving from the incoming call event
-      if (identifier && typeof identifier === 'object') {
-        const anyIdentifier = identifier as any;
-
-        // Handle the kind-based identifier structure
-        if (anyIdentifier.kind === 'phoneNumber' && anyIdentifier.phoneNumber) {
-          this.logger.log('Converting kind-based phoneNumber identifier');
-          // Create a proper PhoneNumberIdentifier from the received structure
-          const phoneIdentifier: PhoneNumberIdentifier = {
-            phoneNumber:
-              anyIdentifier.phoneNumber.value || anyIdentifier.phoneNumber,
-          };
-          this.logger.log(
-            'Created PhoneNumberIdentifier:',
-            JSON.stringify(phoneIdentifier, null, 2),
-          );
-          return phoneIdentifier;
-        }
-
-        // Handle legacy structure with direct phoneNumber property
-        if (
-          anyIdentifier.phoneNumber &&
-          typeof anyIdentifier.phoneNumber === 'string'
-        ) {
-          return {
-            phoneNumber: anyIdentifier.phoneNumber,
-          } as PhoneNumberIdentifier;
-        }
-
-        // Handle structure with nested phoneNumber.value
-        if (
-          anyIdentifier.phoneNumber &&
-          anyIdentifier.phoneNumber.value &&
-          typeof anyIdentifier.phoneNumber.value === 'string'
-        ) {
-          return {
-            phoneNumber: anyIdentifier.phoneNumber.value,
-          } as PhoneNumberIdentifier;
-        }
-
-        // If it has id property, create a CommunicationUserIdentifier
-        if (anyIdentifier.id && typeof anyIdentifier.id === 'string') {
-          return { communicationUserId: anyIdentifier.id };
-        }
+  private prepareDtmfTarget(identifier: CommunicationIdentifier): CommunicationIdentifier | null {
+    if (isPhoneNumberIdentifier(identifier)) return identifier;
+    if (isCommunicationUserIdentifier(identifier)) return identifier;
+    if (isMicrosoftTeamsUserIdentifier(identifier)) return identifier;
+    if (isUnknownIdentifier(identifier)) return identifier;
+    if (identifier && typeof identifier === 'object') {
+      const anyId = identifier as any;
+      if (anyId.kind === 'phoneNumber' && anyId.phoneNumber) {
+        return { phoneNumber: anyId.phoneNumber.value || anyId.phoneNumber } as PhoneNumberIdentifier;
       }
-
-      this.logger.error(
-        'Unable to prepare DTMF target from identifier:',
-        identifier,
-      );
-      return null;
+      if (anyId.phoneNumber && typeof anyId.phoneNumber === 'string') {
+        return { phoneNumber: anyId.phoneNumber } as PhoneNumberIdentifier;
+      }
+      if (anyId.id && typeof anyId.id === 'string') {
+        return { communicationUserId: anyId.id };
+      }
     }
+    return null;
   }
 
-  // Handle call connected event
   async handleCallConnected(callConnectionId: string): Promise<void> {
     this.logger.log(`Call connected: ${callConnectionId}`);
     this.updateCallState(callConnectionId, 'connected');
   }
 
-  // Handle call disconnected event
   async handleCallDisconnected(callConnectionId: string): Promise<void> {
     this.logger.log(`Call disconnected: ${callConnectionId}`);
     this.updateCallState(callConnectionId, 'disconnected');
-
-    // Cleanup
     this.activeCalls.delete(callConnectionId);
     this.callConnections.delete(callConnectionId);
   }
 
-  // Update call state
-  private updateCallState(
-    serverCallId: string,
-    state: CallSession['state'],
-  ): void {
+  private updateCallState(serverCallId: string, state: CallSession['state']): void {
     const callSession = this.activeCalls.get(serverCallId);
     if (callSession) {
       callSession.state = state;
@@ -484,7 +263,6 @@ export class CallAutomationService {
     }
   }
 
-  // Reject a call
   async rejectCall(incomingCallContext: string): Promise<void> {
     try {
       await this.callAutomationClient.rejectCall(incomingCallContext);
@@ -495,16 +273,14 @@ export class CallAutomationService {
     }
   }
 
-  // Hang up a call
   async hangUpCall(serverCallId: string): Promise<void> {
     const callConnection = this.callConnections.get(serverCallId);
     if (!callConnection) {
       this.logger.warn(`Call connection not found for ${serverCallId}`);
       return;
     }
-
     try {
-      await callConnection.hangUp(true); // Terminate for everyone
+      await callConnection.hangUp(true);
       this.logger.log(`Call hung up: ${serverCallId}`);
     } catch (error) {
       this.logger.error(`Failed to hang up call ${serverCallId}:`, error);
@@ -512,17 +288,14 @@ export class CallAutomationService {
     }
   }
 
-  // Get active calls
   getActiveCalls(): CallSession[] {
     return Array.from(this.activeCalls.values());
   }
 
-  // Get call session by ID
   getCallSession(serverCallId: string): CallSession | undefined {
     return this.activeCalls.get(serverCallId);
   }
 
-  // Get call statistics
   getCallStats() {
     const activeCalls = this.getActiveCalls();
     return {
@@ -531,8 +304,7 @@ export class CallAutomationService {
         incoming: activeCalls.filter((c) => c.state === 'incoming').length,
         answered: activeCalls.filter((c) => c.state === 'answered').length,
         connected: activeCalls.filter((c) => c.state === 'connected').length,
-        disconnected: activeCalls.filter((c) => c.state === 'disconnected')
-          .length,
+        disconnected: activeCalls.filter((c) => c.state === 'disconnected').length,
       },
       activeCalls: activeCalls.map((call) => ({
         callConnectionId: call.callConnectionId,
@@ -545,126 +317,63 @@ export class CallAutomationService {
     };
   }
 
-  // Create media streaming configuration
   private createMediaStreamingConfig(baseUrl: string, serverCallId: string): any {
-    // Create websocket URL for audio streaming
     const wsUrl = baseUrl.replace(/^https?:/, 'wss:').replace(/^http:/, 'ws:');
     const audioStreamingUrl = `${wsUrl}/ws?serverCallId=${serverCallId}`;
-
-    const config = {
+    return {
       transportUrl: audioStreamingUrl,
       transportType: 'websocket',
       contentType: 'audio',
       audioChannelType: 'unmixed',
       enableBidirectional: DEFAULT_MEDIA_STREAMING_CONFIG.enableBidirectional,
-      audioFormat: 'Pcm24KMono', // Use Pcm24KMono for better quality
-      startMediaStreaming: false, // We'll start streaming manually after DTMF
+      audioFormat: 'Pcm24KMono',
+      startMediaStreaming: false,
     };
-
-    this.logger.log(`Created media streaming config:`, {
-      transportUrl: config.transportUrl,
-      audioFormat: config.audioFormat,
-      audioChannelType: config.audioChannelType,
-    });
-
-    return config;
   }
 
-  // Start audio streaming for a call
   async startAudioStreaming(serverCallId: string): Promise<void> {
     const callConnection = this.callConnections.get(serverCallId);
     const audioSession = this.audioStreamingSessions.get(serverCallId);
-
-    if (!callConnection) {
-      this.logger.warn(`Call connection not found for ${serverCallId}`);
-      return;
-    }
-
-    if (!audioSession) {
-      this.logger.warn(`Audio streaming session not found for ${serverCallId}`);
-      return;
-    }
-
-    if (audioSession.isStreaming) {
-      this.logger.log(`Audio streaming already active for ${serverCallId}`);
-      return;
-    }
-
+    if (!callConnection || !audioSession || audioSession.isStreaming) return;
     try {
       this.logger.log(`Starting audio streaming for call ${serverCallId}`);
-
       const callMedia: CallMedia = callConnection.getCallMedia();
-
-      // Start media streaming using the correct API signature
       const startOptions: StartMediaStreamingOptions = {
         operationContext: `startMediaStreaming_${serverCallId}`,
       };
-
       await callMedia.startMediaStreaming(startOptions);
-
-      // Update streaming session state
       audioSession.isStreaming = true;
       audioSession.startTime = new Date();
-      audioSession.recordingPath = `recordings/${serverCallId}.wav`;
-
-      this.logger.log(
-        `Audio streaming started successfully for call ${serverCallId}`,
-        {
-          operationContext: startOptions.operationContext,
-          recordingPath: audioSession.recordingPath,
-        },
-      );
+      this.logger.log(`Audio streaming started successfully for call ${serverCallId}`);
     } catch (error) {
-      this.logger.error(
-        `Failed to start audio streaming for call ${serverCallId}:`,
-        error,
-      );
-      // Don't throw error, as call should continue even if streaming fails
+      this.logger.error(`Failed to start audio streaming for call ${serverCallId}:`, error);
     }
   }
 
-  // Stop audio streaming for a call
   async stopAudioStreaming(serverCallId: string): Promise<void> {
     const callConnection = this.callConnections.get(serverCallId);
     const audioSession = this.audioStreamingSessions.get(serverCallId);
-
-    if (!callConnection || !audioSession || !audioSession.isStreaming) {
-      return;
-    }
-
+    if (!callConnection || !audioSession || !audioSession.isStreaming) return;
     try {
       this.logger.log(`Stopping audio streaming for call ${serverCallId}`);
-
       const callMedia: CallMedia = callConnection.getCallMedia();
-
       const stopOptions: StopMediaStreamingOptions = {
         operationContext: `stopMediaStreaming_${serverCallId}`,
       };
-
       await callMedia.stopMediaStreaming(stopOptions);
-
-      // Update session state
       audioSession.isStreaming = false;
       audioSession.endTime = new Date();
-
       this.logger.log(`Audio streaming stopped for call ${serverCallId}`);
     } catch (error) {
-      this.logger.error(
-        `Failed to stop audio streaming for call ${serverCallId}:`,
-        error,
-      );
+      this.logger.error(`Failed to stop audio streaming for call ${serverCallId}:`, error);
     }
   }
 
-  // Handle media streaming events
   async handleMediaStreamingStarted(serverCallId: string): Promise<void> {
     const audioSession = this.audioStreamingSessions.get(serverCallId);
     if (audioSession) {
       audioSession.isStreaming = true;
       audioSession.startTime = new Date();
-      this.logger.log(
-        `Media streaming started confirmed for call ${serverCallId}`,
-      );
     }
   }
 
@@ -673,9 +382,94 @@ export class CallAutomationService {
     if (audioSession) {
       audioSession.isStreaming = false;
       audioSession.endTime = new Date();
-      this.logger.log(
-        `Media streaming stopped confirmed for call ${serverCallId}`,
-      );
+    }
+  }
+
+  private generateAcsAuthHeader(method: string, url: string, body: string): { [key: string]: string } {
+    const date = new Date().toUTCString();
+    const contentHash = crypto.createHash('sha256').update(body).digest('base64');
+    const parsedUrl = new URL(url);
+    const pathAndQuery = parsedUrl.pathname + parsedUrl.search;
+    const stringToSign = `${method}\n${pathAndQuery}\n${date};${parsedUrl.host};${contentHash}`;
+    const signature = crypto.createHmac('sha256', Buffer.from(this.acsAccessKey, 'base64'))
+      .update(stringToSign)
+      .digest('base64');
+    
+    return {
+      'x-ms-date': date,
+      'x-ms-content-sha256': contentHash,
+      'Authorization': `HMAC-SHA256 SignedHeaders=x-ms-date;host;x-ms-content-sha256&Signature=${signature}`,
+      'Content-Type': 'application/json',
+    };
+  }
+
+  async joinTeamsMeeting(teamsLink: string, displayName?: string): Promise<{ success: boolean; callConnectionId?: string; serverCallId?: string; error?: string }> {
+    try {
+      this.logger.log(`Joining Teams meeting: ${teamsLink}`);
+      const baseUrl = this.configService.get<string>('BASE_URL', 'http://localhost:3000');
+      const botDisplayName = displayName || this.configService.get<string>('ACS_DISPLAY_NAME', 'Project Manager AI');
+      const serverCallId = `teams-meeting-${Date.now()}`;
+      const mediaStreamingConfig = this.createMediaStreamingConfig(baseUrl, serverCallId);
+
+      this.logger.log(`Using display name: ${botDisplayName}`);
+      this.logger.log(`Callback URL: ${baseUrl}/acs/events`);
+
+      const callbackUri = `${baseUrl}/acs/events`;
+      const apiUrl = `${this.acsEndpoint}calling/callConnections?api-version=2024-09-15`;
+      
+      const requestBody = {
+        callbackUri: callbackUri,
+        sourceDisplayName: botDisplayName,
+        mediaStreamingConfiguration: {
+          transportUrl: mediaStreamingConfig.transportUrl,
+          transportType: mediaStreamingConfig.transportType,
+          contentType: mediaStreamingConfig.contentType,
+          audioChannelType: mediaStreamingConfig.audioChannelType,
+        },
+        meetingLocator: {
+          kind: 'teamsMeetingLink',
+          teamsMeetingLink: teamsLink,
+        },
+      };
+
+      const bodyString = JSON.stringify(requestBody);
+      this.logger.log(`Request body: ${bodyString}`);
+
+      const headers = this.generateAcsAuthHeader('POST', apiUrl, bodyString);
+      
+      const response = await axios.post(apiUrl, requestBody, { headers });
+
+      this.logger.log(`ACS API response:`, response.data);
+
+      const callConnectionId = response.data.callConnectionId;
+      
+      const callSession: CallSession = {
+        callConnectionId: callConnectionId,
+        serverCallId: serverCallId,
+        correlationId: serverCallId,
+        incomingCallContext: teamsLink,
+        state: 'answered',
+        startTime: new Date(),
+        participants: [],
+      };
+      this.activeCalls.set(serverCallId, callSession);
+
+      const audioSession: AudioStreamingSession = {
+        serverCallId,
+        callConnectionId: callConnectionId,
+        isStreaming: false,
+      };
+      this.audioStreamingSessions.set(serverCallId, audioSession);
+
+      this.logger.log(`Successfully joined Teams meeting. CallConnectionId: ${callConnectionId}`);
+      return { success: true, callConnectionId, serverCallId };
+    } catch (error) {
+      this.logger.error(`Failed to join Teams meeting:`, error);
+      if (error.response) {
+        this.logger.error(`Response status: ${error.response.status}`);
+        this.logger.error(`Response data:`, JSON.stringify(error.response.data, null, 2));
+      }
+      return { success: false, error: error.message || 'Failed to join Teams meeting' };
     }
   }
 }

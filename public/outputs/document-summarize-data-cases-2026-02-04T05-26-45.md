@@ -1,0 +1,1 @@
+I've created a summary for you about summarize the data in my cases and build me a small report and put that in my workspace?. You can view it in the Workspace tab.
