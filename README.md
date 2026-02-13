@@ -22,7 +22,7 @@ Built with modern technologies including NestJS, TypeScript, and WebSockets, thi
 ## ✨ Key Features
 
 - **🎙️ Automatic Meeting Recording**: Seamlessly joins Teams meetings and records audio in real-time
-- **🔊 Text-to-Speech Integration**: Powered by OpenAI TTS for natural-sounding announcements
+- **🔊 Speech-to-Speech Integration**: Powered by OpenAI Realtime API for natural voice conversations
 - **📊 Real-time Dashboard**: Beautiful web interface for monitoring active calls and recordings
 - **🌐 WebSocket Streaming**: Low-latency audio streaming and real-time event updates
 - **📱 DTMF Support**: Interactive touch-tone responses during calls
