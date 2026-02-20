@@ -106,6 +106,19 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       return session?.latestScreenshot || null;
     });
 
+    // Thinking callback - sends activity status to client
+    this.openAIRealtimeService.setThinkingCallback((serverCallId, message) => {
+      const session = this.findSessionByServerCallId(serverCallId);
+      if (session) this.sendToClient(session.socket, 'thinking', { message });
+    });
+
+    // Vision analysis callback - calls Claude to analyze screenshots
+    this.openAIRealtimeService.setVisionAnalysisCallback(async (screenshotBase64, userQuestion) => {
+      this.logger.log('👁️ Analyzing screenshot with Claude Vision...');
+      const analysis = await this.claudeService.analyzeScreenshot(screenshotBase64, userQuestion);
+      return analysis;
+    });
+
     // Speaking state callback - also clears S2S state
     this.openAIRealtimeService.setSpeakingStateChangedCallback((serverCallId, isSpeaking) => {
       const session = this.findSessionByServerCallId(serverCallId);
@@ -223,6 +236,7 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         const response = await this.claudeService.chat(serverCallId, transcript, undefined);
 
         this.logger.log(`📄 Claude response received: text=${response.text?.length || 0} chars, document=${response.document ? 'yes' : 'no'}`);
+        this.sendToClient(session.socket, 'thinking', { message: '✅ Claude generated document' });
 
         if (response.error) {
           this.logger.error('Document generation failed:', response.error);
@@ -238,6 +252,7 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
           this.logger.log(`📄 Document generated: ${response.document.type} - ${response.document.title}`);
           const filename = `${response.document.type}-${response.document.title.replace(/[^a-zA-Z0-9]/g, '-').substring(0, 30)}`;
           
+          this.sendToClient(session.socket, 'thinking', { message: '💾 Saving to local workspace...' });
           const savedFile = await this.fileOutputService.saveContent(
             serverCallId,
             response.document.content,
@@ -246,6 +261,14 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
             response.document.type,
           );
           this.logger.log(`📄 File saved: ${savedFile.filename}`);
+          
+          this.sendToClient(session.socket, 'thinking', { message: '📁 Uploading to SharePoint via Power Automate...' });
+          await this.openAIRealtimeService.saveDocumentToSharePoint(
+            savedFile.filename,
+            response.document.content
+          );
+          this.logger.log('📁 Document saved to SharePoint');
+          this.sendToClient(session.socket, 'thinking', { message: '✅ Document saved to SharePoint' });
           
           this.sendToClient(session.socket, 'file_saved', {
             filename: savedFile.filename,
@@ -374,6 +397,12 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       case 'trigger_response':
         this.handleTriggerResponse(session);
         break;
+      case 'request_vision_analysis':
+        this.handleVisionAnalysisRequest(session, message);
+        break;
+      case 'save_screenshot':
+        this.handleSaveScreenshot(session, message);
+        break;
       default:
         this.logger.warn(`Unknown message type: ${message.type}`);
     }
@@ -437,9 +466,97 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     }
   }
 
+
+
+
   private handleTriggerResponse(session: ClientSession) {
     if (session.realtimeConnected) {
       this.openAIRealtimeService.triggerResponse(session.serverCallId);
+    }
+  }
+
+  private async handleVisionAnalysisRequest(session: ClientSession, data: any) {
+    const userQuestion = data.question || 'What do you see on this screen?';
+    
+    this.logger.log('Vision analysis requested: ' + userQuestion);
+    
+    if (!session.latestScreenshot) {
+      this.logger.warn('No screenshot available for vision analysis');
+      this.sendToClient(session.socket, 'vision_analysis_result', {
+        success: false,
+        error: 'No screenshot available',
+        analysis: 'I cannot see your screen right now. Please make sure screen capture is active.'
+      });
+      return;
+    }
+
+    try {
+      this.sendToClient(session.socket, 'thinking', { message: 'Analyzing screen with Claude Vision...' });
+      
+      const analysis = await this.claudeService.analyzeScreenshot(session.latestScreenshot, userQuestion);
+      
+      this.logger.log('Vision analysis complete: ' + analysis.substring(0, 100) + '...');
+      this.sendToClient(session.socket, 'thinking', { message: 'Screen analysis complete' });
+      
+      this.sendToClient(session.socket, 'vision_analysis_result', {
+        success: true,
+        analysis: analysis,
+        question: userQuestion
+      });
+    } catch (error) {
+      this.logger.error('Vision analysis failed: ' + error.message);
+      this.sendToClient(session.socket, 'vision_analysis_result', {
+        success: false,
+        error: error.message,
+        analysis: 'I had trouble analyzing your screen. Please try again.'
+      });
+    }
+  }
+  private async handleSaveScreenshot(session: ClientSession, data: any) {
+    const imageData = data.image || session.latestScreenshot;
+    if (!imageData) {
+      this.logger.warn('No screenshot available to save');
+      this.sendToClient(session.socket, 'screenshot_saved', {
+        success: false,
+        error: 'No screenshot available. Make sure screen capture is active.',
+      });
+      return;
+    }
+
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `screenshot-${timestamp}`;
+
+      this.sendToClient(session.socket, 'thinking', { message: '💾 Saving screenshot...' });
+
+      // Save locally
+      const savedFile = await this.fileOutputService.saveImage(
+        session.serverCallId,
+        imageData,
+        filename,
+      );
+      this.logger.log(`📸 Screenshot saved locally: ${savedFile.filename}`);
+
+      // Upload to SharePoint
+      this.sendToClient(session.socket, 'thinking', { message: '📁 Uploading to SharePoint...' });
+      await this.openAIRealtimeService.saveDocumentToSharePoint(
+        savedFile.filename,
+        imageData,
+      );
+      this.logger.log('📁 Screenshot uploaded to SharePoint');
+
+      this.sendToClient(session.socket, 'screenshot_saved', {
+        success: true,
+        filename: savedFile.filename,
+        url: savedFile.url,
+        size: savedFile.size,
+      });
+    } catch (error) {
+      this.logger.error('Screenshot save failed:', error);
+      this.sendToClient(session.socket, 'screenshot_saved', {
+        success: false,
+        error: error.message,
+      });
     }
   }
 

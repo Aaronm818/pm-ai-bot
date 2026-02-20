@@ -14,7 +14,7 @@ async function bootstrap() {
   });
 
   app.useWebSocketAdapter(new WsAdapter(app));
-  app.useStaticAssets(join(__dirname, '..', 'public'));
+  app.useStaticAssets(join(process.cwd(), 'public'));
 
   await app.listen(process.env.PORT ?? 3000);
   console.log(`Application running: http://localhost:${process.env.PORT ?? 3000}`);

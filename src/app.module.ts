@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { WebSocketModule } from './websocket/websocket.module';
 import { CallAutomationModule } from './call-automation/call-automation.module';
+import { WebRTCController } from './websocket/webrtc.controller';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { CallAutomationModule } from './call-automation/call-automation.module';
     WebSocketModule,  // Uses OpenAI Realtime (gpt-realtime full model)
     CallAutomationModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, WebRTCController],
   providers: [AppService],
 })
 export class AppModule {}

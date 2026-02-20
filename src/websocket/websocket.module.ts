@@ -8,9 +8,13 @@ import { TTSService } from './tts.service';
 import { FileOutputService } from './file-output.service';
 import { DataverseService } from './dataverse.service';
 import { OpenAIRealtimeService } from './openai-realtime.service';
+import { UserService } from './user.service';
+import { AuthController } from './auth.controller';
+import { BotController } from './bot.controller';
 
 @Module({
   imports: [ConfigModule],
+  controllers: [AuthController, BotController],
   providers: [
     WebSocketGateway,
     WebSocketService,
@@ -20,6 +24,7 @@ import { OpenAIRealtimeService } from './openai-realtime.service';
     TTSService,
     FileOutputService,
     DataverseService,
+    UserService,
   ],
   exports: [
     WebSocketGateway,
@@ -30,6 +35,7 @@ import { OpenAIRealtimeService } from './openai-realtime.service';
     TTSService,
     FileOutputService,
     DataverseService,
+    UserService,
   ],
 })
 export class WebSocketModule {}

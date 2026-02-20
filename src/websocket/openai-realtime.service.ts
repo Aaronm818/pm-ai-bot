@@ -8,13 +8,78 @@ interface OpenAISession {
   transcript: Array<{ role: string; text: string; timestamp: Date }>;
   isConnected: boolean;
   lastActivity: Date;
-  isSpeaking: boolean; // Track if AI is currently speaking
+  isSpeaking: boolean;
+  commitTimer?: ReturnType<typeof setInterval>;
 }
+
+/**
+ * =============================================================================
+ * PM AI BOT - VOICE CONFIGURATION
+ * =============================================================================
+ * 
+ * These settings follow OpenAI's Realtime API best practices.
+ * See: PM-AI-Bot-Voice-Configuration-Playbook.md for full documentation.
+ * 
+ * Last Updated: February 18, 2026
+ * =============================================================================
+ */
+
+// Voice Configuration Constants
+const VOICE_CONFIG = {
+  // Voice Selection - 'marin' is OpenAI's recommended highest quality voice
+  VOICE: 'marin',
+  
+  // Audio Format - pcm16 at 24kHz is standard for Realtime API
+  AUDIO_FORMAT: 'pcm16',
+  SAMPLE_RATE: 24000,
+  
+  // Speech Speed - 1.0 is normal, range is 0.25-1.5
+  SPEED: 1.0,
+  
+  // Noise Reduction - 'far_field' for conference rooms/laptop mics
+  // Options: 'near_field' (headphones), 'far_field' (meeting rooms)
+  NOISE_REDUCTION: 'far_field',
+  
+  // Turn Detection Settings
+  TURN_DETECTION: {
+    // 'server_vad' = volume-based, 'semantic_vad' = AI-based turn detection
+    TYPE: 'server_vad',
+    
+    // Threshold 0.0-1.0 - Higher = less sensitive to background noise
+    // With noise_reduction enabled, we can use a lower threshold (0.6 vs 0.8)
+    THRESHOLD: 0.6,
+    
+    // Audio captured before speech is detected (ms)
+    // 500ms ensures we capture the full "Hey PM" wake word
+    PREFIX_PADDING_MS: 500,
+    
+    // How long to wait after silence before processing (ms)
+    // 1200ms allows natural pauses without cutting users off
+    SILENCE_DURATION_MS: 1200,
+    
+    // Manual response control - we trigger after wake word detection
+    CREATE_RESPONSE: false,
+    
+    // Allow users to interrupt PM while speaking
+    INTERRUPT_RESPONSE: true,
+  },
+  
+  // Response Limits
+  MAX_RESPONSE_TOKENS: 2048,  // Keep voice responses concise
+  
+  // Transcription hints for better accuracy
+  TRANSCRIPTION_PROMPT: 'PM, Hey PM, Project Manager, Teams, SharePoint, calendar, Concentrix, Microsoft, meeting',
+};
 
 @Injectable()
 export class OpenAIRealtimeService implements OnModuleInit {
   private logger: Logger = new Logger('OpenAIRealtimeService');
   private sessions: Map<string, OpenAISession> = new Map();
+
+  // Power Automate Flow URLs for Calendar, Teams, and SharePoint
+  private calendarFlowUrl = 'https://default599e51d62f8c43478e591f795a51a9.8c.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/cb0657fc187c4f9480ca475d983888d6/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=IrY9VpDTGQKfEKBG5jfRZmpswcB3sfUHPplCTkvnrjc';
+  private teamsFlowUrl = 'https://default599e51d62f8c43478e591f795a51a9.8c.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ed0c4dfb79ea4158ac54e23287f8837a/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=gL_iI0Gbq3CoDdPj8qPSEaF9YGmEF8lmYt8Q-tq12Jc';
+  private sharePointFlowUrl = 'https://default599e51d62f8c43478e591f795a51a9.8c.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/fd85bcf5735c417d9ad6941e57dcd167/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=BBYtHondLl4KXWGJswH20bInWt-y4sxn1Xc9yMRAYw4';
 
   // Callbacks for sending responses back to clients
   private audioResponseCallback: ((serverCallId: string, audioBase64: string) => void) | null = null;
@@ -22,9 +87,13 @@ export class OpenAIRealtimeService implements OnModuleInit {
   private getVisionContextCallback: ((serverCallId: string) => string | null) | null = null;
   private speakingStateChangedCallback: ((serverCallId: string, isSpeaking: boolean) => void) | null = null;
   private pmTextResponseCallback: ((serverCallId: string, text: string) => Promise<void>) | null = null;
-  
-  // Silent document generation callback - Claude builds, no voice output
   private silentDocumentCallback: ((serverCallId: string, transcript: string) => Promise<void>) | null = null;
+  
+  // Thinking status callback - sends activity updates to client
+  private thinkingCallback: ((serverCallId: string, message: string) => void) | null = null;
+
+  // Vision analysis callback - calls Claude to analyze screenshots
+  private visionAnalysisCallback: ((screenshotBase64: string, userQuestion: string) => Promise<string>) | null = null;
 
   // Wake word patterns for OpenAI Realtime (PM Bot)
   private pmWakeWordPatterns = [
@@ -33,26 +102,24 @@ export class OpenAIRealtimeService implements OnModuleInit {
     /project\s*manager/i,
     /p\.?m\.?\s*bot/i,
   ];
-  
+
   // Wake word patterns for Claude
   private claudeWakeWordPatterns = [
     /hey\s*claude/i,
     /claude/i,
     /ask\s*claude/i,
   ];
-  
-  // Callback for Claude requests
+
   private claudeRequestCallback: ((serverCallId: string, transcript: string, visionContext: string | null) => Promise<void>) | null = null;
 
   constructor(private readonly configService: ConfigService) {}
 
   onModuleInit() {
     this.logger.log('OpenAI Realtime Service initialized');
+    this.logger.log(`🎤 Voice Config: ${VOICE_CONFIG.VOICE}, Noise Reduction: ${VOICE_CONFIG.NOISE_REDUCTION}`);
+    this.logger.log(`🎛️ VAD: ${VOICE_CONFIG.TURN_DETECTION.TYPE}, Threshold: ${VOICE_CONFIG.TURN_DETECTION.THRESHOLD}`);
   }
 
-  /**
-   * Set callback for audio responses (set to null to disable)
-   */
   setAudioResponseCallback(callback: ((serverCallId: string, audioBase64: string) => void) | null): void {
     this.audioResponseCallback = callback;
     if (callback === null) {
@@ -60,59 +127,45 @@ export class OpenAIRealtimeService implements OnModuleInit {
     }
   }
 
-  /**
-   * Set callback for transcripts
-   */
   setTranscriptCallback(callback: (serverCallId: string, text: string, isFinal: boolean) => void): void {
     this.transcriptCallback = callback;
   }
 
-  /**
-   * Set callback for getting vision context
-   */
   setVisionContextCallback(callback: (serverCallId: string) => string | null): void {
     this.getVisionContextCallback = callback;
   }
 
-  /**
-   * Set callback for speaking state changes
-   */
   setSpeakingStateChangedCallback(callback: (serverCallId: string, isSpeaking: boolean) => void): void {
     this.speakingStateChangedCallback = callback;
   }
 
-  /**
-   * Set callback for PM text responses (will be converted to speech by TTS service)
-   */
   setPmTextResponseCallback(callback: (serverCallId: string, text: string) => Promise<void>): void {
     this.pmTextResponseCallback = callback;
   }
 
-  /**
-   * Set callback for Claude requests (when "Hey Claude" is detected)
-   */
   setClaudeRequestCallback(callback: (serverCallId: string, transcript: string, visionContext: string | null) => Promise<void>): void {
     this.claudeRequestCallback = callback;
   }
 
-  /**
-   * Set callback for silent document generation (Claude builds, PM speaks)
-   */
   setSilentDocumentCallback(callback: (serverCallId: string, transcript: string) => Promise<void>): void {
     this.silentDocumentCallback = callback;
     this.logger.log('📄 Silent document callback registered');
   }
 
-  /**
-   * Check if session is currently speaking (for muting input)
-   */
+  setThinkingCallback(callback: (serverCallId: string, message: string) => void): void {
+    this.thinkingCallback = callback;
+    this.logger.log('💭 Thinking callback registered');
+  }
+
+  setVisionAnalysisCallback(callback: (screenshotBase64: string, userQuestion: string) => Promise<string>): void {
+    this.visionAnalysisCallback = callback;
+    this.logger.log('👁️ Vision analysis callback registered');
+  }
+
   isSpeaking(serverCallId: string): boolean {
     return this.sessions.get(serverCallId)?.isSpeaking || false;
   }
 
-  /**
-   * Create a new OpenAI Realtime session
-   */
   async createSession(serverCallId: string): Promise<boolean> {
     if (this.sessions.has(serverCallId)) {
       this.logger.log(`Session already exists for ${serverCallId}`);
@@ -123,27 +176,21 @@ export class OpenAIRealtimeService implements OnModuleInit {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
     const deployment = this.configService.get<string>('OPENAI_DEPLOYMENT') || 'gpt-realtime';
 
-    // Debug logging
     this.logger.log(`[DEBUG] OPENAI_ENDPOINT = "${endpoint || 'NOT SET'}"`);
     this.logger.log(`[DEBUG] OPENAI_API_KEY = "${apiKey ? '***' + apiKey.slice(-4) : 'NOT SET'}"`);
     this.logger.log(`[DEBUG] OPENAI_DEPLOYMENT = "${deployment}"`);
 
     if (!endpoint || !apiKey) {
       this.logger.error('OpenAI endpoint or API key not configured');
-      this.logger.error('Make sure .env file exists in project root with OPENAI_ENDPOINT and OPENAI_API_KEY');
       return false;
     }
 
     try {
-      // Build WebSocket URL for Azure OpenAI Realtime
       const wsUrl = `${endpoint.replace('https://', 'wss://')}/openai/realtime?api-version=2024-10-01-preview&deployment=${deployment}`;
-
       this.logger.log(`Connecting to OpenAI Realtime: ${wsUrl}`);
 
       const ws = new WebSocket(wsUrl, {
-        headers: {
-          'api-key': apiKey,
-        },
+        headers: { 'api-key': apiKey },
       });
 
       const session: OpenAISession = {
@@ -157,7 +204,6 @@ export class OpenAIRealtimeService implements OnModuleInit {
 
       this.sessions.set(serverCallId, session);
 
-      // Set up event handlers
       ws.on('open', () => {
         this.logger.log(`OpenAI Realtime connected for ${serverCallId}`);
         session.isConnected = true;
@@ -185,8 +231,61 @@ export class OpenAIRealtimeService implements OnModuleInit {
   }
 
   /**
-   * Configure the OpenAI Realtime session for TRUE Speech-to-Speech
-   * Uses native OpenAI Realtime audio (not chained TTS)
+   * Configure the OpenAI Realtime session with optimized voice parameters.
+   * 
+   * PARAMETER REFERENCE:
+   * ====================
+   * 
+   * modalities: ['text']
+   *   - We use text-only for INPUT to enable manual wake word control
+   *   - Audio output is enabled on response.create
+   * 
+   * voice: 'marin'
+   *   - OpenAI's recommended highest quality voice
+   *   - Professional tone suitable for enterprise meetings
+   *   - Alternative: 'cedar' for more conversational tone
+   * 
+   * noise_reduction: { type: 'far_field' }
+   *   - Filters background noise BEFORE VAD processing
+   *   - 'far_field' = conference rooms, laptop mics (Teams meetings)
+   *   - 'near_field' = headphones, close microphones
+   *   - Improves transcription accuracy and reduces false VAD triggers
+   * 
+   * turn_detection.type: 'server_vad'
+   *   - Volume-based voice activity detection
+   *   - Fast and reliable for wake word scenarios
+   *   - Alternative: 'semantic_vad' for more natural conversations
+   * 
+   * turn_detection.threshold: 0.6
+   *   - Lowered from 0.8 because noise_reduction handles background noise
+   *   - Range: 0.0 (very sensitive) to 1.0 (requires loud speech)
+   *   - 0.6 catches quieter speakers while still filtering noise
+   * 
+   * turn_detection.prefix_padding_ms: 500
+   *   - Audio captured BEFORE speech is detected
+   *   - 500ms ensures we capture the full "Hey PM" wake word
+   *   - Lower values may clip the beginning of utterances
+   * 
+   * turn_detection.silence_duration_ms: 1200
+   *   - How long to wait after silence before processing
+   *   - 1200ms allows natural pauses without cutting users off
+   *   - Lower = faster response, Higher = more patient
+   * 
+   * turn_detection.create_response: false
+   *   - We manually trigger responses after wake word detection
+   *   - Gives us control over routing (PM vs Claude vs document generation)
+   * 
+   * turn_detection.interrupt_response: true
+   *   - Allows users to interrupt PM while it's speaking
+   *   - Better UX - users don't have to wait for PM to finish
+   * 
+   * input_audio_transcription.prompt: [domain terms]
+   *   - Helps Whisper recognize domain-specific words
+   *   - Include common terms: PM, Teams, SharePoint, etc.
+   * 
+   * max_response_output_tokens: 2048
+   *   - Caps response length for voice (keeps it concise)
+   *   - Voice responses should be short - under 30 seconds
    */
   private configureSession(serverCallId: string): void {
     const session = this.sessions.get(serverCallId);
@@ -194,52 +293,81 @@ export class OpenAIRealtimeService implements OnModuleInit {
       return;
     }
 
-    // CHAINED Architecture: OpenAI for transcription + text response, Azure Neural TTS for voice
-    // This fixes the voice inconsistency bug in OpenAI's S2S audio output
     const sessionConfig = {
       type: 'session.update',
       session: {
-        modalities: ['text'],  // TEXT ONLY - no S2S audio output (it has voice inconsistency bugs)
-        instructions: `You are PM AI Bot, a helpful Project Manager assistant for Teams meetings. 
-You listen to conversations and respond when someone says "Hey PM" or "Project Manager".
-Keep responses concise and helpful. Focus on action items, summaries, and meeting assistance.
-If you can see the user's screen, use that context to provide more relevant answers.
-When describing what you see on screen, be specific about the content visible.
+        // Accept audio input for transcription; responses are text-only (create_response: false)
+        modalities: ['text', 'audio'],
+        
+        // System prompt optimized for voice responses
+        instructions: `You are PM AI Bot, a voice-activated Project Manager assistant for Microsoft Teams meetings.
 
-IMPORTANT: When someone asks you to write a report, create an email, or generate any document:
-- Say something like "Sure, I'll create that for you. Give me just a moment." or "Got it, working on that report now."
-- Keep it brief and friendly
-- The document will automatically appear in the Workspace tab`,
-        // NO voice config - we use Azure Neural TTS for audio output
-        input_audio_format: 'pcm16',
-        // NO output_audio_format - text only
+WAKE WORD: Respond when someone says "Hey PM" or "Project Manager".
+
+VOICE STYLE:
+- Keep responses under 30 seconds of spoken audio
+- Be concise and conversational - this is voice, not text
+- Avoid bullet points, numbered lists, and markdown formatting
+- Use natural speech patterns and contractions
+- Confirm actions before executing them
+
+CAPABILITIES:
+- Check calendar via Microsoft Graph API (Power Automate)
+- Send messages to Teams channels
+- Analyze screen content via Claude Vision
+- Generate documents and save to SharePoint
+
+CONTEXT HANDLING:
+- CALENDAR: When you receive calendar data in CONTEXT DATA, summarize it naturally
+- TEAMS: Confirm when messages are sent successfully
+- VISION: When describing screen content, be specific but brief
+- DOCUMENTS: Say "Sure, I'll create that for you" and keep the verbal response short
+
+IMPORTANT: The document will automatically appear in the Workspace tab and be saved to SharePoint - don't explain this every time, just acknowledge the request briefly.`,
+
+        // Audio input configuration with noise reduction
+        input_audio_format: VOICE_CONFIG.AUDIO_FORMAT,
+        
+        // Transcription settings with domain hints
         input_audio_transcription: {
           model: 'whisper-1',
+          prompt: VOICE_CONFIG.TRANSCRIPTION_PROMPT,
         },
+        
+        // Voice Activity Detection (VAD) settings
         turn_detection: {
-          type: 'server_vad',
-          threshold: 0.8,
-          prefix_padding_ms: 500,
-          silence_duration_ms: 1500,
-          create_response: false,  // Manual trigger on wake word
+          type: VOICE_CONFIG.TURN_DETECTION.TYPE,
+          threshold: VOICE_CONFIG.TURN_DETECTION.THRESHOLD,
+          prefix_padding_ms: VOICE_CONFIG.TURN_DETECTION.PREFIX_PADDING_MS,
+          silence_duration_ms: VOICE_CONFIG.TURN_DETECTION.SILENCE_DURATION_MS,
+          create_response: VOICE_CONFIG.TURN_DETECTION.CREATE_RESPONSE,
         },
       },
     };
 
     session.ws.send(JSON.stringify(sessionConfig));
-    this.logger.log(`✅ Session configured (TEXT ONLY - Azure Neural TTS for voice): ${serverCallId}`);
+
+    this.logger.log(`✅ Session configured for ${serverCallId}`);
+    this.logger.log(`   Voice: ${VOICE_CONFIG.VOICE} | Noise Reduction: ${VOICE_CONFIG.NOISE_REDUCTION}`);
+    this.logger.log(`   VAD: ${VOICE_CONFIG.TURN_DETECTION.TYPE} @ ${VOICE_CONFIG.TURN_DETECTION.THRESHOLD} threshold`);
+    this.logger.log(`   Silence: ${VOICE_CONFIG.TURN_DETECTION.SILENCE_DURATION_MS}ms | Prefix: ${VOICE_CONFIG.TURN_DETECTION.PREFIX_PADDING_MS}ms`);
+
+    // Periodically commit audio buffer to force transcription of continuous audio
+    // (e.g., YouTube/meeting audio that never has long silence gaps)
+    session.commitTimer = setInterval(() => {
+      if (session.ws && session.ws.readyState === WebSocket.OPEN && !session.isSpeaking) {
+        session.ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+        this.logger.debug(`🔄 Auto-committed audio buffer for ${serverCallId}`);
+      }
+    }, 8000);
   }
 
-  /**
-   * Send audio data to OpenAI Realtime (only if not speaking)
-   */
   sendAudio(serverCallId: string, audioBase64: string): void {
     const session = this.sessions.get(serverCallId);
     if (!session?.ws || session.ws.readyState !== WebSocket.OPEN) {
       return;
     }
 
-    // DON'T send audio while AI is speaking (prevents echo/cutoff)
     if (session.isSpeaking) {
       return;
     }
@@ -248,20 +376,34 @@ IMPORTANT: When someone asks you to write a report, create an email, or generate
       type: 'input_audio_buffer.append',
       audio: audioBase64,
     };
-
     session.ws.send(JSON.stringify(audioMessage));
-    session.lastActivity = new Date();
   }
 
-  /**
-   * Handle messages from OpenAI Realtime
-   */
+  closeSession(serverCallId: string): void {
+    const session = this.sessions.get(serverCallId);
+    if (session) {
+      if (session.commitTimer) {
+        clearInterval(session.commitTimer);
+      }
+      if (session.ws) {
+        session.ws.close();
+      }
+    }
+    this.sessions.delete(serverCallId);
+    this.logger.log(`Session closed: ${serverCallId}`);
+  }
+
+  endSession(serverCallId: string): void {
+    this.closeSession(serverCallId);
+  }
+
   private handleOpenAIMessage(serverCallId: string, data: Buffer): void {
     const session = this.sessions.get(serverCallId);
     if (!session) return;
 
     try {
       const message = JSON.parse(data.toString());
+      session.lastActivity = new Date();
 
       switch (message.type) {
         case 'session.created':
@@ -280,47 +422,35 @@ IMPORTANT: When someone asks you to write a report, create an email, or generate
           this.logger.log(`Speech stopped: ${serverCallId}`);
           break;
 
+        case 'input_audio_buffer.committed':
+          this.logger.log(`Audio committed: ${serverCallId}`);
+          break;
+
         case 'conversation.item.input_audio_transcription.completed':
-          this.handleTranscript(serverCallId, message.transcript);
+          if (message.transcript) {
+            this.handleTranscript(serverCallId, message.transcript);
+          }
           break;
 
         case 'response.audio.delta':
-          // TRUE S2S: Send OpenAI Realtime's native audio directly to client
-          if (!session.isSpeaking) {
-            session.isSpeaking = true;
-            this.logger.log(`🔊 PM S2S audio started: ${serverCallId}`);
-            
-            // Clear input audio buffer to prevent echo
-            const clearBuffer = { type: 'input_audio_buffer.clear' };
-            session.ws.send(JSON.stringify(clearBuffer));
-            
-            if (this.speakingStateChangedCallback) {
-              this.speakingStateChangedCallback(serverCallId, true);
-            }
-          }
-          
-          // Send native S2S audio to client
           if (message.delta && this.audioResponseCallback) {
             this.audioResponseCallback(serverCallId, message.delta);
           }
           break;
 
         case 'response.audio_transcript.delta':
-          // AI response transcript (partial) - for UI display
           if (message.delta && this.transcriptCallback) {
             this.transcriptCallback(serverCallId, message.delta, false);
           }
           break;
 
         case 'response.audio_transcript.done':
-          // S2S transcript complete - for UI only (audio already streamed)
-          this.logger.log(`📝 PM S2S transcript: "${message.transcript?.substring(0, 50)}..."`);
+          this.logger.log(`🔊 PM S2S transcript: "${message.transcript?.substring(0, 50)}..."`);
           if (message.transcript && this.transcriptCallback) {
             this.transcriptCallback(serverCallId, message.transcript, true);
           }
           break;
 
-        // TEXT-ONLY RESPONSE HANDLERS (fallback if no audio)
         case 'response.text.delta':
           if (message.delta && this.transcriptCallback) {
             this.transcriptCallback(serverCallId, message.delta, false);
@@ -328,22 +458,18 @@ IMPORTANT: When someone asks you to write a report, create an email, or generate
           break;
 
         case 'response.text.done':
-          this.logger.log(`📝 PM text response complete: ${serverCallId}`);
+          this.logger.log(`🔊 PM text response complete: ${serverCallId}`);
           if (message.text && this.pmTextResponseCallback) {
             this.pmTextResponseCallback(serverCallId, message.text);
           }
           break;
 
         case 'response.audio.done':
-          // AI finished this audio segment
           this.logger.log(`Audio segment done: ${serverCallId}`);
           break;
 
         case 'response.done':
-          // AI finished responding completely
           this.logger.log(`🔇 AI finished speaking: ${serverCallId}`);
-          
-          // Add a short delay before resuming input to allow audio playback to finish
           setTimeout(() => {
             const sess = this.sessions.get(serverCallId);
             if (sess) {
@@ -353,17 +479,15 @@ IMPORTANT: When someone asks you to write a report, create an email, or generate
                 this.speakingStateChangedCallback(serverCallId, false);
               }
             }
-          }, 500); // 500ms delay after response.done
+          }, 500);
           break;
 
         case 'error':
           this.logger.error(`OpenAI error: ${JSON.stringify(message.error)}`);
-          // Reset speaking state on error
           session.isSpeaking = false;
           break;
 
         default:
-          // Log unknown message types for debugging
           if (message.type && !message.type.startsWith('response.content_part')) {
             this.logger.debug(`OpenAI message: ${message.type}`);
           }
@@ -373,32 +497,26 @@ IMPORTANT: When someone asks you to write a report, create an email, or generate
     }
   }
 
-  /**
-   * Handle transcript and check for wake words
-   */
   private async handleTranscript(serverCallId: string, transcript: string): Promise<void> {
     const session = this.sessions.get(serverCallId);
     if (!session || !transcript) return;
 
     this.logger.log(`Transcript [${serverCallId}]: ${transcript}`);
 
-    // Store in transcript history
     session.transcript.push({
       role: 'user',
       text: transcript,
       timestamp: new Date(),
     });
 
-    // Send to client
     if (this.transcriptCallback) {
       this.transcriptCallback(serverCallId, transcript, true);
     }
 
-    // Check for wake words
     const hasPmWakeWord = this.pmWakeWordPatterns.some((pattern) =>
       pattern.test(transcript),
     );
-    
+
     const hasClaudeWakeWord = this.claudeWakeWordPatterns.some((pattern) =>
       pattern.test(transcript),
     );
@@ -406,59 +524,91 @@ IMPORTANT: When someone asks you to write a report, create an email, or generate
     // Claude takes priority if both are detected
     if (hasClaudeWakeWord && this.claudeRequestCallback) {
       this.logger.log(`🧠 CLAUDE WAKE WORD DETECTED in: "${transcript}"`);
-      
-      // Get vision context if available
       const visionContext = this.getVisionContextCallback ? this.getVisionContextCallback(serverCallId) : null;
-      
-      // Route to Claude
       await this.claudeRequestCallback(serverCallId, transcript, visionContext);
       return;
     }
 
     if (hasPmWakeWord) {
       this.logger.log(`🎯 PM WAKE WORD DETECTED in: "${transcript}"`);
+
+      // Check for CALENDAR questions
+      const isCalendarQuestion = /calendar|schedule|meeting|meetings|what.*(on my calendar|on my schedule|do i have)|am i free|busy|appointment/i.test(transcript);
       
-      // Check if this is a DOCUMENT REQUEST - PM speaks via S2S, Claude builds silently
-      const isDocumentRequest = /write\s+(me\s+)?(a\s+)?(status\s+)?report|create\s+(me\s+)?(a\s+)?report|generate\s+(me\s+)?(a\s+)?report|make\s+(me\s+)?(a\s+)?report|draft\s+(me\s+)?(an?\s+)?email|write\s+(me\s+)?(an?\s+)?email|create\s+(me\s+)?(a\s+)?summary|write\s+(me\s+)?(a\s+)?summary|summarize|summary\s+of|prepare\s+(me\s+)?(a\s+)?(report|summary|email)|give\s+me\s+(a\s+)?(report|summary)|can\s+you\s+(create|write|make|generate)\s+(me\s+)?(a\s+)?(report|summary|email)/i.test(transcript);
-      
-      this.logger.log(`📄 Checking document request: "${transcript}" => ${isDocumentRequest}`);
-      
-      if (isDocumentRequest && this.silentDocumentCallback) {
-        this.logger.log(`📄 DOCUMENT REQUEST MATCHED: PM will speak (S2S), Claude builds silently`);
-        
-        // 1. PM speaks via S2S (OpenAI Realtime voice) - "I'll create that for you"
-        this.triggerResponse(serverCallId);
-        
-        // 2. Claude builds document silently (no voice output) - use await to catch errors
-        try {
-          await this.silentDocumentCallback(serverCallId, transcript);
-          this.logger.log(`📄 Silent document callback completed`);
-        } catch (err) {
-          this.logger.error(`📄 Silent document callback error:`, err);
-        }
-        
+      // Check for TEAMS message requests
+      const isTeamsMessage = /send.*(message|team|chat)|tell.*(team|everyone|group)|message.*(team|channel|chat)|notify/i.test(transcript);
+
+      // Check if this is a DOCUMENT REQUEST
+      const isDocumentRequest = /write\s+(me\s+)?(a\s+)?(status\s+)?report|create\s+(me\s+)?(a\s+)?(status\s+)?report|generate\s+(me\s+)?(a\s+)?report|make\s+(me\s+)?(a\s+)?report|draft\s+(me\s+)?(an?\s+)?email|write\s+(me\s+)?(an?\s+)?email|create\s+(me\s+)?(a\s+)?summary|write\s+(me\s+)?(a\s+)?summary|summarize|summary\s+of|prepare\s+(me\s+)?(a\s+)?(report|summary|email)|give\s+me\s+(a\s+)?(report|summary)|can\s+you\s+(create|write|make|generate)\s+(me\s+)?(a\s+)?(report|summary|email)/i.test(transcript);
+
+      // Handle CALENDAR questions - fetch real data first
+      if (isCalendarQuestion) {
+        this.logger.log('📅 CALENDAR QUESTION DETECTED - Fetching real calendar data...');
+        if (this.thinkingCallback) this.thinkingCallback(serverCallId, '🔍 Detected calendar question...');
+        if (this.thinkingCallback) this.thinkingCallback(serverCallId, '📅 Fetching calendar from Power Automate → Microsoft Graph API...');
+        const calendarData = await this.fetchCalendarData();
+        if (this.thinkingCallback) this.thinkingCallback(serverCallId, '✅ Calendar data received');
+        if (this.thinkingCallback) this.thinkingCallback(serverCallId, '🤖 Sending to OpenAI Realtime for response...');
+        this.triggerResponseWithContext(serverCallId, calendarData);
         return;
       }
-      
-      // Check if asking about screen/vision
-      const isVisionQuestion = /see|screen|looking at|what('s| is) on|show|display|visible/i.test(transcript);
-      
-      if (isVisionQuestion && this.getVisionContextCallback) {
+
+      // Handle TEAMS message requests
+      if (isTeamsMessage) {
+        this.logger.log('💬 TEAMS MESSAGE REQUEST DETECTED');
+        if (this.thinkingCallback) this.thinkingCallback(serverCallId, '🔍 Detected Teams message request...');
+        const messageMatch = transcript.match(/(?:send|tell|message|say|notify).*?(?:that|saying|:)?\s*["']?(.+?)["']?$/i);
+        const messageToSend = messageMatch ? messageMatch[1] : 'Hello from PM AI Bot!';
+        if (this.thinkingCallback) this.thinkingCallback(serverCallId, '💬 Sending to Power Automate → Microsoft Teams API...');
+        const result = await this.sendTeamsMessage(messageToSend);
+        if (this.thinkingCallback) this.thinkingCallback(serverCallId, '✅ Message sent to Teams');
+        if (this.thinkingCallback) this.thinkingCallback(serverCallId, '🤖 Sending to OpenAI Realtime for confirmation...');
+        this.triggerResponseWithContext(serverCallId, result);
+        return;
+      }
+
+      // Handle document requests - BEFORE vision check
+      if (isDocumentRequest) {
+        this.logger.log('📄 DOCUMENT REQUEST MATCHED');
+        if (this.thinkingCallback) this.thinkingCallback(serverCallId, '🔍 Detected document request...');
+        if (this.thinkingCallback) this.thinkingCallback(serverCallId, '🤖 OpenAI Realtime generating voice response...');
+        this.triggerResponse(serverCallId);
+        if (this.silentDocumentCallback) {
+          if (this.thinkingCallback) this.thinkingCallback(serverCallId, '📄 Sending to Claude for document generation...');
+          try {
+            await this.silentDocumentCallback(serverCallId, transcript);
+          } catch (error) {
+            this.logger.error(`Silent document generation failed: ${error.message}`);
+          }
+        }
+        return;
+      }
+
+      // Check for vision questions - uses Claude to actually analyze screenshot
+      if (this.getVisionContextCallback && this.visionAnalysisCallback) {
         const screenshot = this.getVisionContextCallback(serverCallId);
         if (screenshot) {
-          this.logger.log(`📷 Vision question detected, analyzing screenshot...`);
+          this.logger.log('👁️ Vision question detected - analyzing with Claude...');
+          if (this.thinkingCallback) this.thinkingCallback(serverCallId, '🔍 Detected screen question...');
+          if (this.thinkingCallback) this.thinkingCallback(serverCallId, '📷 Capturing screenshot...');
+          if (this.thinkingCallback) this.thinkingCallback(serverCallId, '👁️ Sending to Claude Vision API for analysis...');
           await this.triggerResponseWithVision(serverCallId, transcript, screenshot);
           return;
         }
       }
-      
+
+      // Default response
       this.triggerResponse(serverCallId);
     }
   }
 
   /**
-   * Trigger AI to generate a response (basic, no vision)
-   * Audio is generated but we'll use the transcript for TTS instead
+   * Trigger a response from OpenAI Realtime.
+   * 
+   * Response configuration includes:
+   * - modalities: ['text', 'audio'] - We want voice output
+   * - voice: from VOICE_CONFIG - Currently 'marin'
+   * - max_response_output_tokens: Keeps responses concise for voice
    */
   triggerResponse(serverCallId: string): void {
     const session = this.sessions.get(serverCallId);
@@ -468,23 +618,27 @@ IMPORTANT: When someone asks you to write a report, create an email, or generate
     }
 
     this.logger.log(`🚀 TRIGGERING AI RESPONSE for ${serverCallId}`);
+    session.isSpeaking = true;
 
-    // Need audio modality for OpenAI Realtime to work properly
+    if (this.speakingStateChangedCallback) {
+      this.speakingStateChangedCallback(serverCallId, true);
+    }
+
     const responseCreate = {
       type: 'response.create',
       response: {
         modalities: ['text', 'audio'],
+        voice: VOICE_CONFIG.VOICE,
       },
     };
-
     session.ws.send(JSON.stringify(responseCreate));
   }
 
   /**
-   * Trigger AI response with vision context
+   * Trigger response with REAL vision analysis from Claude
    */
   private async triggerResponseWithVision(
-    serverCallId: string, 
+    serverCallId: string,
     userQuestion: string,
     screenshotBase64: string
   ): Promise<void> {
@@ -494,154 +648,189 @@ IMPORTANT: When someone asks you to write a report, create an email, or generate
     }
 
     try {
-      // Analyze screenshot with GPT-4 Vision
-      const visionDescription = await this.analyzeScreenshot(screenshotBase64, userQuestion);
-      
-      if (visionDescription) {
-        this.logger.log(`📷 Vision analysis: ${visionDescription.substring(0, 100)}...`);
-        
-        // Add vision context as a conversation item
-        const contextItem = {
-          type: 'conversation.item.create',
-          item: {
-            type: 'message',
-            role: 'user',
-            content: [
-              {
-                type: 'input_text',
-                text: `[SCREEN CONTEXT: ${visionDescription}]\n\nThe user asked: "${userQuestion}"`,
-              },
-            ],
-          },
-        };
-        session.ws.send(JSON.stringify(contextItem));
+      this.logger.log(`👁️ Processing vision request for ${serverCallId}`);
+      session.isSpeaking = true;
+
+      if (this.speakingStateChangedCallback) {
+        this.speakingStateChangedCallback(serverCallId, true);
       }
 
-      // Trigger response
+      // ACTUALLY analyze the screenshot with Claude Vision
+      let screenAnalysis = 'Unable to analyze screen.';
+      if (this.visionAnalysisCallback) {
+        this.logger.log('👁️ Calling Claude Vision API to analyze screenshot...');
+        screenAnalysis = await this.visionAnalysisCallback(screenshotBase64, userQuestion);
+        this.logger.log(`👁️ Claude Vision analysis: "${screenAnalysis.substring(0, 100)}..."`);
+        if (this.thinkingCallback) this.thinkingCallback(serverCallId, '✅ Claude analyzed screen');
+        if (this.thinkingCallback) this.thinkingCallback(serverCallId, '🤖 Sending analysis to OpenAI Realtime for voice response...');
+      }
+
+      // Send the REAL analysis to OpenAI Realtime as context
+      const contextItem = {
+        type: 'conversation.item.create',
+        item: {
+          type: 'message',
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: `[SCREEN ANALYSIS - This is what Claude sees on the user's screen]\n${screenAnalysis}\n\n[USER'S QUESTION]\n${userQuestion}`
+            }
+          ]
+        }
+      };
+      session.ws.send(JSON.stringify(contextItem));
+
       const responseCreate = {
         type: 'response.create',
         response: {
           modalities: ['text', 'audio'],
-        },
+          voice: VOICE_CONFIG.VOICE,
+          },
       };
       session.ws.send(JSON.stringify(responseCreate));
-      
     } catch (error) {
       this.logger.error(`Vision analysis failed: ${error.message}`);
-      // Fall back to regular response
       this.triggerResponse(serverCallId);
     }
   }
 
   /**
-   * Analyze screenshot using GPT-4 Vision
+   * Trigger response with injected context (calendar/teams data)
    */
-  private async analyzeScreenshot(screenshotBase64: string, userQuestion: string): Promise<string | null> {
-    const endpoint = this.configService.get<string>('OPENAI_ENDPOINT');
-    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-
-    if (!endpoint || !apiKey) {
-      return null;
+  private triggerResponseWithContext(serverCallId: string, contextMessage: string): void {
+    const session = this.sessions.get(serverCallId);
+    if (!session?.ws || session.ws.readyState !== WebSocket.OPEN) {
+      return;
     }
 
-    try {
-      // Remove data URL prefix if present
-      const base64Data = screenshotBase64.replace(/^data:image\/\w+;base64,/, '');
-      
-      // Use GPT-4 Vision (try gpt-4.1 first, then gpt-4o)
-      const visionDeployments = ['gpt-4.1', 'gpt-4o', 'gpt-4-vision'];
-      
-      for (const deployment of visionDeployments) {
-        const visionUrl = `${endpoint.replace(/\/$/, '')}/openai/deployments/${deployment}/chat/completions?api-version=2024-10-21`;
-        
-        try {
-          const response = await fetch(visionUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'api-key': apiKey,
-            },
-            body: JSON.stringify({
-              messages: [
-                {
-                  role: 'system',
-                  content: 'You are helping a meeting assistant describe what is visible on a shared screen. Be concise but specific about what you see - text, applications, data, charts, presentations, etc.',
-                },
-                {
-                  role: 'user',
-                  content: [
-                    {
-                      type: 'text',
-                      text: `The user asked: "${userQuestion}". Describe what you see on this screen that would help answer their question.`,
-                    },
-                    {
-                      type: 'image_url',
-                      image_url: {
-                        url: `data:image/jpeg;base64,${base64Data}`,
-                      },
-                    },
-                  ],
-                },
-              ],
-              max_tokens: 500,
-            }),
-          });
+    this.logger.log(`🚀 TRIGGERING RESPONSE WITH CONTEXT for ${serverCallId}`);
+    session.isSpeaking = true;
 
-          if (response.ok) {
-            const data = await response.json();
-            return data.choices?.[0]?.message?.content || null;
-          }
-        } catch (e) {
-          this.logger.debug(`Vision deployment ${deployment} failed: ${e.message}`);
-        }
+    if (this.speakingStateChangedCallback) {
+      this.speakingStateChangedCallback(serverCallId, true);
+    }
+
+    // Inject context as a user message
+    const contextItem = {
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: `[CONTEXT DATA - Use this to answer the user's question]\n${contextMessage}` }]
+      }
+    };
+    session.ws.send(JSON.stringify(contextItem));
+
+    // Trigger response with voice config
+    const responseCreate = {
+      type: 'response.create',
+      response: {
+        modalities: ['text', 'audio'],
+        voice: VOICE_CONFIG.VOICE,
+      },
+    };
+    session.ws.send(JSON.stringify(responseCreate));
+  }
+
+  /**
+   * Fetch calendar events from Power Automate
+   */
+  private async fetchCalendarData(): Promise<string> {
+    try {
+      this.logger.log('📅 Fetching calendar from Power Automate...');
+      const response = await fetch(this.calendarFlowUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'getCalendar' }),
+      });
+      
+      if (!response.ok) {
+        return 'Could not fetch calendar data.';
       }
       
-      return null;
+      const events = await response.json();
+      
+      if (!events || events.length === 0) {
+        return 'You have no meetings scheduled for the next 7 days.';
+      }
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // Filter today's meetings
+      const todaysMeetings = events.filter((e: any) => {
+        const eventDate = new Date(e.start?.dateTime || e.start);
+        return eventDate >= today && eventDate < tomorrow;
+      });
+
+      const formatted = events.slice(0, 10).map((e: any) => {
+        const start = new Date(e.start?.dateTime || e.start);
+        const time = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        const date = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        return `- ${e.subject} at ${time} on ${date}`;
+      }).join('\n');
+      
+      this.logger.log(`✅ Found ${events.length} calendar events (${todaysMeetings.length} today)`);
+      return `Here are your upcoming meetings (${todaysMeetings.length} today, ${events.length} total this week):\n${formatted}`;
     } catch (error) {
-      this.logger.error(`Screenshot analysis error: ${error.message}`);
-      return null;
+      this.logger.error('Calendar fetch error:', error);
+      return 'Sorry, I could not access your calendar right now.';
     }
   }
 
   /**
-   * End a session
+   * Send Teams message via Power Automate
    */
-  endSession(serverCallId: string): void {
-    const session = this.sessions.get(serverCallId);
-    if (session?.ws) {
-      session.ws.close();
+  private async sendTeamsMessage(message: string): Promise<string> {
+    try {
+      this.logger.log(`💬 Sending Teams message: "${message.substring(0, 50)}..."`);
+      const response = await fetch(this.teamsFlowUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      
+      if (!response.ok) {
+        return 'Failed to send the message to Teams.';
+      }
+      
+      this.logger.log('✅ Teams message sent successfully');
+      return 'Done! I sent the message to the team chat.';
+    } catch (error) {
+      this.logger.error('Teams message error:', error);
+      return 'Sorry, I could not send the message right now.';
     }
-    this.sessions.delete(serverCallId);
-    this.logger.log(`Session ended: ${serverCallId}`);
   }
 
   /**
-   * Get transcript for a session
+   * Save document to SharePoint via Power Automate
    */
+  async saveDocumentToSharePoint(filename: string, content: string): Promise<boolean> {
+    try {
+      this.logger.log(`📁 Saving document to SharePoint: ${filename}`);
+      const response = await fetch(this.sharePointFlowUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, content }),
+      });
+      
+      if (!response.ok) {
+        this.logger.error(`SharePoint save failed: ${response.status}`);
+        return false;
+      }
+      
+      this.logger.log(`✅ Document saved to SharePoint: ${filename}`);
+      return true;
+    } catch (error) {
+      this.logger.error('SharePoint save error:', error);
+      return false;
+    }
+  }
+
   getTranscript(serverCallId: string): Array<{ role: string; text: string; timestamp: Date }> {
     return this.sessions.get(serverCallId)?.transcript || [];
-  }
-
-  /**
-   * Get session status
-   */
-  getSessionStatus(serverCallId: string): any {
-    const session = this.sessions.get(serverCallId);
-    if (!session) return null;
-
-    return {
-      serverCallId,
-      isConnected: session.isConnected,
-      isSpeaking: session.isSpeaking,
-      transcriptCount: session.transcript.length,
-      lastActivity: session.lastActivity,
-    };
-  }
-
-  /**
-   * Get all active sessions
-   */
-  getActiveSessions(): string[] {
-    return Array.from(this.sessions.keys());
   }
 }

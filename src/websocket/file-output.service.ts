@@ -246,6 +246,47 @@ export class FileOutputService {
   }
 
   /**
+   * Save a base64-encoded image to a file
+   */
+  async saveImage(
+    sessionId: string,
+    base64Data: string,
+    filename: string,
+  ): Promise<SavedFile> {
+    this.ensureOutputDirectory();
+
+    // Strip data URI prefix if present
+    const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Content, 'base64');
+
+    const fullFilename = `${filename}.jpg`;
+    const filepath = path.join(this.outputDir, fullFilename);
+
+    fs.writeFileSync(filepath, buffer);
+
+    const stats = fs.statSync(filepath);
+    const baseUrl = this.configService.get<string>('BASE_URL') || 'http://localhost:3000';
+
+    const savedFile: SavedFile = {
+      filename: fullFilename,
+      filepath: filepath,
+      url: `${baseUrl}/outputs/${fullFilename}`,
+      type: 'screenshot',
+      size: stats.size,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (!this.savedFiles.has(sessionId)) {
+      this.savedFiles.set(sessionId, []);
+    }
+    this.savedFiles.get(sessionId)!.push(savedFile);
+
+    this.logger.log(`📸 Saved screenshot: ${fullFilename} (${stats.size} bytes)`);
+
+    return savedFile;
+  }
+
+  /**
    * Get all saved files for a session
    */
   getSessionFiles(sessionId: string): SavedFile[] {

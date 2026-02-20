@@ -2028,6 +2028,60 @@
             text-decoration: underline;
         }
 
+        /* Form error message */
+        .form-error {
+            background: rgba(204, 50, 98, 0.15);
+            border: 1px solid var(--accent-magenta);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: var(--accent-magenta);
+            font-size: 0.85rem;
+            margin-bottom: 16px;
+        }
+
+        /* Login toggle link */
+        .login-toggle {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .login-toggle a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .login-toggle a:hover {
+            text-decoration: underline;
+        }
+
+        /* Sign Out Button */
+        .btn-signout {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 12px 16px;
+            margin-top: 12px;
+            background: rgba(204, 50, 98, 0.1);
+            border: 1px solid rgba(204, 50, 98, 0.3);
+            border-radius: 10px;
+            color: var(--accent-magenta);
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-signout:hover {
+            background: rgba(204, 50, 98, 0.2);
+            border-color: var(--accent-magenta);
+        }
+
         /* Profile indicator in sidebar */
         .user-profile {
             display: flex;
@@ -2103,34 +2157,68 @@
                     <p>Concentrix Microsoft Agentic AI</p>
                 </div>
 
-                <form class="login-form" id="loginForm" onsubmit="handleLogin(event)">
+                <!-- Sign In Form -->
+                <form class="login-form" id="signInForm" onsubmit="handleSignIn(event)">
                     <div class="form-group">
-                        <label for="userName">Your Name</label>
-                        <input type="text" id="userName" class="form-input" placeholder="Enter your name" required>
+                        <label for="signInEmail">Email</label>
+                        <input type="email" id="signInEmail" class="form-input" placeholder="Enter your email" required>
                     </div>
                     
                     <div class="form-group">
-                        <label for="userRole">Role / Team</label>
-                        <input type="text" id="userRole" class="form-input" placeholder="e.g., Project Manager, Engineering">
+                        <label for="signInPassword">Password</label>
+                        <input type="password" id="signInPassword" class="form-input" placeholder="Enter your password" required>
                     </div>
 
+                    <div id="signInError" class="form-error" style="display: none;"></div>
+
                     <button type="submit" class="btn-login btn-login-primary">
-                        <span>🚀</span>
-                        Get Started
+                        <span>🔐</span>
+                        Sign In
                     </button>
                 </form>
 
-                <div class="login-divider">or continue with</div>
+                <!-- Create Account Form (hidden by default) -->
+                <form class="login-form" id="createAccountForm" onsubmit="handleCreateAccount(event)" style="display: none;">
+                    <div class="form-group">
+                        <label for="createName">Full Name</label>
+                        <input type="text" id="createName" class="form-input" placeholder="Enter your full name" required>
+                    </div>
 
-                <button class="btn-login btn-login-microsoft" onclick="handleMicrosoftLogin()">
-                    <svg class="microsoft-icon" viewBox="0 0 23 23" fill="none">
-                        <rect width="11" height="11" fill="#F25022"/>
-                        <rect x="12" width="11" height="11" fill="#7FBA00"/>
-                        <rect y="12" width="11" height="11" fill="#00A4EF"/>
-                        <rect x="12" y="12" width="11" height="11" fill="#FFB900"/>
-                    </svg>
-                    Sign in with Microsoft
-                </button>
+                    <div class="form-group">
+                        <label for="createEmail">Email</label>
+                        <input type="email" id="createEmail" class="form-input" placeholder="Enter your email" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="createRole">Role / Team</label>
+                        <input type="text" id="createRole" class="form-input" placeholder="e.g., Project Manager, Engineering">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="createPassword">Password</label>
+                        <input type="password" id="createPassword" class="form-input" placeholder="Create a password (min 6 characters)" required minlength="6">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm Password</label>
+                        <input type="password" id="confirmPassword" class="form-input" placeholder="Confirm your password" required>
+                    </div>
+
+                    <div id="createError" class="form-error" style="display: none;"></div>
+
+                    <button type="submit" class="btn-login btn-login-primary">
+                        <span>✨</span>
+                        Create Account
+                    </button>
+                </form>
+
+                <!-- Toggle between Sign In and Create Account -->
+                <div class="login-toggle">
+                    <p id="toggleToCreate">Don't have an account? <a href="#" onclick="showCreateAccount(event)">Create one</a></p>
+                    <p id="toggleToSignIn" style="display: none;">Already have an account? <a href="#" onclick="showSignIn(event)">Sign in</a></p>
+                </div>
+
+                <div class="login-divider">or</div>
 
                 <button class="btn-login btn-login-guest" onclick="handleGuestLogin()">
                     <span>👤</span>
@@ -2192,10 +2280,13 @@
                         <div class="user-name" id="userDisplayName">Not signed in</div>
                         <div class="user-role" id="userDisplayRole">Guest</div>
                     </div>
-                    <button class="btn-logout" onclick="handleLogout()" title="Sign out">
-                        🚪
-                    </button>
                 </div>
+                
+                <!-- Sign Out Button -->
+                <button class="btn-signout" onclick="handleLogout()">
+                    <span>🚪</span>
+                    Sign Out
+                </button>
                 
                 <div class="connection-status">
                     <div class="status-dot-sidebar" id="sidebarStatus"></div>
@@ -2512,6 +2603,9 @@
                                 </button>
                                 <button class="btn btn-primary" id="snapshotBtn" onclick="takeSnapshot()" disabled>
                                     📸 Analyze Screen Now
+                                </button>
+                                <button class="btn btn-primary" id="saveScreenshotBtn" onclick="saveScreenshot()" disabled style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+                                    📷 Save Screenshot
                                 </button>
                             </div>
                         </div>
@@ -2867,6 +2961,12 @@
         let isCapturing = false;
         let analysisTimer = null;
         let aiIsSpeaking = false;  // Track when AI is speaking to ignore echo
+        let visionRequestPending = false;  // Prevent duplicate vision requests
+        let transcriptHistory = [];  // Collect transcript entries for download
+
+        // ===== WebRTC Mode =====
+        let useWebRTC = true;  // Always use WebRTC for lower latency
+        let webrtcInitialized = false;
 
         // ===== Dashboard Stats (NEW) =====
         let dashboardStats = {
@@ -2880,6 +2980,127 @@
             filesSaved: 0,
             activities: []
         };
+
+        // ===== WebRTC Mode Functions =====
+        async function initWebRTCConnection() {
+            if (!window.WebRTCAudio) {
+                log('WebRTC module not loaded, using WebSocket', 'warning');
+                useWebRTC = false;
+                return false;
+            }
+            
+            const serverUrl = document.getElementById('serverUrl').value.trim().replace(/\/$/, '');
+            if (!serverUrl) {
+                log('Server URL required', 'error');
+                return false;
+            }
+            
+            // Convert to HTTP URL for API calls
+            const httpUrl = serverUrl.replace(/^ws/, 'http');
+            
+            // Set up callbacks
+            WebRTCAudio.setCallbacks({
+                onThinking: (msg) => log(msg, 'thinking'),
+                onTranscript: (text, role) => {
+                    transcriptHistory.push({ time: new Date(), role: role === 'user' ? 'User' : 'PM Bot', text });
+                    if (role === 'user') {
+                        addToMonitor('user', text);
+                        trackVoiceInteraction();
+                        
+                        // Check for vision questions with PM wake word
+                        const isPMWakeWord = /\b(hey\s+pm|hey\s+project\s*manager|pm\s+bot)\b/i.test(text);
+                        const isVisionQuestion = /\b(screen|see|looking\s+at|display|showing|visible|what('s|s)?\s+(on|do\s+you\s+see))\b/i.test(text);
+                        
+                        if (isPMWakeWord && isVisionQuestion) {
+                            console.log('👁️ Vision question detected, cancelling hallucination...');
+                            log('👁️ Vision question detected - cancelling AI and analyzing screen...', 'thinking');
+
+                            // Step 1: Cancel + mute the hallucinated OpenAI response immediately
+                            if (window.WebRTCAudio && WebRTCAudio.cancelResponse) {
+                                WebRTCAudio.cancelResponse();
+                            }
+
+                            // Step 2: Take a fresh screenshot if screen capture is active
+                            if (mediaStream && isCapturing) {
+                                takeSnapshot();
+                                log('Fresh screenshot captured for vision analysis', 'thinking');
+                            }
+
+                            // Step 3: Request vision analysis from server (uses latest screenshot)
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({
+                                    type: 'request_vision_analysis',
+                                    question: text
+                                }));
+                            } else {
+                                log('WebSocket not connected - cannot request vision analysis', 'error');
+                            }
+                        }
+                    } else {
+                        addToMonitor('assistant', text);
+
+                        // Detect when OpenAI says "let me take a look/analyze your screen"
+                        // This means the user asked a vision question and OpenAI followed our instruction
+                        // Use the AI's output as the trigger since input transcription may not work on Azure WebRTC
+                        const isVisionAck = /\b(take a look at|analyze|check|look at)\s+(your|the)\s+screen\b/i.test(text);
+                        if (isVisionAck && !visionRequestPending) {
+                            visionRequestPending = true;
+                            console.log('👁️ AI acknowledged vision request - triggering Claude analysis...');
+                            log('👁️ AI acknowledged screen question - analyzing with Claude Vision...', 'thinking');
+
+                            // Take a fresh screenshot
+                            if (mediaStream && isCapturing) {
+                                takeSnapshot();
+                            }
+
+                            // Request vision analysis from server
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({
+                                    type: 'request_vision_analysis',
+                                    question: 'What is on the user\'s screen?'
+                                }));
+                            }
+                        }
+                    }
+                },
+                onResponse: (data) => {
+                    log('AI response complete', 'success');
+                },
+                onError: (err) => {
+                    log(`WebRTC error: ${err}`, 'error');
+                },
+                onConnected: () => {
+                    log('✅ Low-latency audio connected!', 'success');
+                    addDashboardActivity('Audio', 'Direct connection established', '🚀', 'success');
+                },
+                onDisconnected: () => {
+                    log('Audio disconnected, falling back to WebSocket', 'warning');
+                    webrtcInitialized = false;
+                    useWebRTC = false;
+                }
+            });
+            
+            // Initialize WebRTC
+            log('🚀 Connecting audio...', 'info');
+            const success = await WebRTCAudio.init(httpUrl);
+            
+            if (!success) {
+                log('Falling back to WebSocket audio', 'warning');
+                useWebRTC = false;
+            }
+            
+            webrtcInitialized = success;
+            return success;
+        }
+
+        // Function to inject context via WebRTC (for calendar, vision, etc.)
+        function injectContextToWebRTC(context) {
+            if (webrtcInitialized && window.WebRTCAudio && WebRTCAudio.isConnected()) {
+                WebRTCAudio.injectContext(context);
+                return true;
+            }
+            return false;
+        }
 
         // ===== Tab Switching (NEW) =====
         function switchTab(tabName) {
@@ -3756,6 +3977,9 @@ PM AI Bot
                     
                     // Auto-start session after connecting
                     ws.send(JSON.stringify({ type: 'start_session', meetingContext: 'PM AI Bot Session' }));
+                    
+                    // Initialize WebRTC for low-latency audio
+                    setTimeout(() => initWebRTCConnection(), 500);
                 };
 
                 ws.onclose = () => {
@@ -3781,6 +4005,12 @@ PM AI Bot
         }
 
         function disconnectFromServer() {
+            // Close WebRTC if connected
+            if (webrtcInitialized && window.WebRTCAudio) {
+                WebRTCAudio.close();
+                webrtcInitialized = false;
+            }
+            
             if (ws) {
                 ws.close();
                 ws = null;
@@ -3899,8 +4129,8 @@ PM AI Bot
                         addTranscript(data.text, data.isFinal, 'user');
                         if (data.isFinal) {
                             trackVoiceInteraction();
-                            // Add to AI Monitor
                             addToMonitor('user', data.text);
+                            transcriptHistory.push({ time: new Date(), role: 'User', text: data.text });
                         }
                         break;
                         
@@ -3947,6 +4177,7 @@ PM AI Bot
                         log(`PM: "${data.text.substring(0, 60)}${data.text.length > 60 ? '...' : ''}"`, 'ai-response');
                         addTranscript(data.text, true, 'ai');
                         addDashboardActivity('PM Response', data.text.substring(0, 40) + '...', '🤖', 'success');
+                        transcriptHistory.push({ time: new Date(), role: 'PM Bot', text: data.text });
                         break;
                         
                     case 'dataverse_response':
@@ -3967,10 +4198,36 @@ PM AI Bot
                         log('Vision analysis complete', 'success');
                         trackScreenshot();
                         break;
-                        
+
+                    case 'vision_analysis_result':
+                        visionRequestPending = false;  // Allow new vision requests
+                        if (data.success && data.analysis) {
+                            updateVisionAnalysis(data.analysis);
+                            log(`👁️ Vision: ${data.analysis.substring(0, 80)}...`, 'success');
+                            addToMonitor('vision', `👁️ Screen analysis: ${data.analysis}`);
+                            trackScreenshot();
+
+                            // Inject Claude's analysis into WebRTC so OpenAI can speak it
+                            if (webrtcInitialized && window.WebRTCAudio && WebRTCAudio.isConnected()) {
+                                console.log('👁️ Injecting vision analysis into WebRTC...');
+                                const injected = WebRTCAudio.injectVisionAndRespond(data.analysis, data.question || 'What do you see?');
+                                if (injected) {
+                                    log('Injected vision context - OpenAI will now describe your screen', 'thinking');
+                                } else {
+                                    log('WebRTC inject failed - vision result shown in UI only', 'warning');
+                                }
+                            } else {
+                                log('WebRTC not connected - vision result shown in UI only', 'warning');
+                            }
+                        } else {
+                            log(`Vision analysis failed: ${data.error || 'unknown error'}`, 'error');
+                        }
+                        break;
+
                     case 'vision_frame_received':
                         log('Analyzing screenshot...', 'thinking');
                         break;
+
                         
                     case 'file_saved': {
                         console.log('📄 FILE_SAVED received:', data);
@@ -4052,6 +4309,7 @@ PM AI Bot
 
         // ===== Screen Capture =====
         async function startCapture() {
+            transcriptHistory = [];
             try {
                 log('Requesting screen capture...', 'info');
                 
@@ -4117,15 +4375,32 @@ PM AI Bot
 
                 // Audio processor for streaming
                 audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
-                mixedGain.connect(audioProcessor);
                 audioProcessor.connect(audioContext.destination);
+
+                if (useWebRTC && webrtcInitialized) {
+                    // WebRTC mode: only send screen/system audio to server for transcription
+                    // (mic audio goes directly to Azure OpenAI via WebRTC)
+                    const screenOnlyGain = audioContext.createGain();
+                    screenOnlyGain.gain.value = 1.0;
+                    const screenAudioTracks = mediaStream.getAudioTracks();
+                    if (screenAudioTracks.length > 0) {
+                        const screenSource = audioContext.createMediaStreamSource(
+                            new MediaStream([screenAudioTracks[0]])
+                        );
+                        screenSource.connect(screenOnlyGain);
+                    }
+                    screenOnlyGain.connect(audioProcessor);
+                } else {
+                    // Non-WebRTC mode: send mixed audio (screen + mic) to server
+                    mixedGain.connect(audioProcessor);
+                }
 
                 audioProcessor.onaudioprocess = (event) => {
                     if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
                     const inputData = event.inputBuffer.getChannelData(0);
                     const pcm16 = new Int16Array(inputData.length);
-                    
+
                     for (let i = 0; i < inputData.length; i++) {
                         pcm16[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
                     }
@@ -4152,6 +4427,7 @@ PM AI Bot
                 document.getElementById('startCaptureBtn').disabled = true;
                 document.getElementById('stopCaptureBtn').disabled = false;
                 document.getElementById('snapshotBtn').disabled = false;
+                document.getElementById('saveScreenshotBtn').disabled = false;
 
                 log('Screen capture started!', 'success');
 
@@ -4191,8 +4467,39 @@ PM AI Bot
             document.getElementById('startCaptureBtn').disabled = false;
             document.getElementById('stopCaptureBtn').disabled = true;
             document.getElementById('snapshotBtn').disabled = true;
+            document.getElementById('saveScreenshotBtn').disabled = true;
             document.getElementById('audioLevelFill').style.width = '0%';
             document.getElementById('audioLevelValue').textContent = '0%';
+
+            // Auto-download transcript if there are entries
+            if (transcriptHistory.length > 0) {
+                const now = new Date();
+                const ts = now.getFullYear() + '-'
+                    + String(now.getMonth() + 1).padStart(2, '0') + '-'
+                    + String(now.getDate()).padStart(2, '0') + '-'
+                    + String(now.getHours()).padStart(2, '0')
+                    + String(now.getMinutes()).padStart(2, '0')
+                    + String(now.getSeconds()).padStart(2, '0');
+
+                let transcript = `PM AI Bot - Meeting Transcript\n`;
+                transcript += `Date: ${now.toLocaleString()}\n`;
+                transcript += `================================\n\n`;
+
+                for (const entry of transcriptHistory) {
+                    const timeStr = entry.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    transcript += `[${timeStr}] ${entry.role}: ${entry.text}\n`;
+                }
+
+                const blob = new Blob([transcript], { type: 'text/plain' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `pm-transcript-${ts}.txt`;
+                link.click();
+                URL.revokeObjectURL(link.href);
+
+                log('📝 Transcript downloaded', 'success');
+                addDashboardActivity('Transcript Downloaded', `pm-transcript-${ts}.txt`, '📝', 'success');
+            }
 
             log('Screen capture stopped', 'info');
         }
@@ -4243,6 +4550,45 @@ PM AI Bot
                 }));
                 log('Snapshot sent for analysis', 'info');
             }
+        }
+
+        function saveScreenshot() {
+            if (!mediaStream) {
+                log('No screen capture active', 'error');
+                return;
+            }
+
+            // Capture fresh screenshot as PNG
+            const video = document.getElementById('screenVideo');
+            const canvas = document.getElementById('snapshotCanvas');
+            canvas.width = video.videoWidth || 1280;
+            canvas.height = video.videoHeight || 720;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            const imageData = canvas.toDataURL('image/png');
+
+            // Update preview
+            const snapshotImg = document.getElementById('lastSnapshot');
+            snapshotImg.src = imageData;
+            snapshotImg.style.display = 'block';
+            document.getElementById('snapshotPlaceholder').style.display = 'none';
+            document.getElementById('lastAnalyzedTime').textContent = new Date().toLocaleTimeString();
+
+            // Trigger browser download
+            const now = new Date();
+            const ts = now.getFullYear() + '-'
+                + String(now.getMonth() + 1).padStart(2, '0') + '-'
+                + String(now.getDate()).padStart(2, '0') + '-'
+                + String(now.getHours()).padStart(2, '0')
+                + String(now.getMinutes()).padStart(2, '0')
+                + String(now.getSeconds()).padStart(2, '0');
+            const link = document.createElement('a');
+            link.href = imageData;
+            link.download = `pm-screenshot-${ts}.png`;
+            link.click();
+
+            log('📸 Screenshot downloaded', 'success');
+            addDashboardActivity('Screenshot Downloaded', `pm-screenshot-${ts}.png`, '📸', 'success');
         }
 
         function startAutoAnalysis() {
@@ -4383,38 +4729,331 @@ PM AI Bot
 
         // ===== LOGIN & PROFILE MANAGEMENT =====
         let currentUser = null;
+        let useBackendAuth = false; // Will be set based on backend availability
+        let backendUrl = ''; // Will be auto-detected or set from server URL input
 
-        function handleLogin(event) {
+        // Auto-detect backend URL from current page
+        function detectBackendUrl() {
+            // If served from localhost or a server, use that as backend
+            const currentUrl = window.location.origin;
+            if (currentUrl && !currentUrl.includes('file://')) {
+                backendUrl = currentUrl;
+                console.log('🔐 Auto-detected backend URL:', backendUrl);
+                return backendUrl;
+            }
+            return '';
+        }
+
+        // ===== BACKEND API FUNCTIONS =====
+        async function checkBackendAuthStatus() {
+            // Auto-detect if not set
+            if (!backendUrl) {
+                detectBackendUrl();
+            }
+            if (!backendUrl) return false;
+            
+            try {
+                const response = await fetch(`${backendUrl}/api/auth/status`, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' },
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    useBackendAuth = data.configured;
+                    console.log(`🔐 Backend auth: ${data.configured ? 'Dataverse' : 'localStorage fallback'}`);
+                    return data.configured;
+                }
+            } catch (error) {
+                console.log('🔐 Backend not available, using localStorage');
+            }
+            
+            useBackendAuth = false;
+            return false;
+        }
+
+        async function apiRegister(name, email, password, role) {
+            const response = await fetch(`${backendUrl}/api/auth/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ name, email, password, role }),
+            });
+            
+            return await response.json();
+        }
+
+        async function apiLogin(email, password) {
+            const response = await fetch(`${backendUrl}/api/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ email, password }),
+            });
+            
+            return await response.json();
+        }
+
+        // ===== LOCAL STORAGE FALLBACK =====
+        function getAccounts() {
+            const accounts = localStorage.getItem('pmAiAccounts');
+            return accounts ? JSON.parse(accounts) : {};
+        }
+
+        function saveAccount(email, accountData) {
+            const accounts = getAccounts();
+            accounts[email.toLowerCase()] = accountData;
+            localStorage.setItem('pmAiAccounts', JSON.stringify(accounts));
+        }
+
+        function findAccount(email) {
+            const accounts = getAccounts();
+            return accounts[email.toLowerCase()] || null;
+        }
+
+        // Simple password hashing (for localStorage fallback)
+        function hashPassword(password) {
+            let hash = 0;
+            for (let i = 0; i < password.length; i++) {
+                const char = password.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return 'h_' + Math.abs(hash).toString(16);
+        }
+
+        // ===== FORM TOGGLE =====
+        function showCreateAccount(event) {
+            event.preventDefault();
+            document.getElementById('signInForm').style.display = 'none';
+            document.getElementById('createAccountForm').style.display = 'flex';
+            document.getElementById('toggleToCreate').style.display = 'none';
+            document.getElementById('toggleToSignIn').style.display = 'block';
+            document.getElementById('signInError').style.display = 'none';
+            document.getElementById('createError').style.display = 'none';
+            document.getElementById('createName').focus();
+        }
+
+        function showSignIn(event) {
+            event.preventDefault();
+            document.getElementById('signInForm').style.display = 'flex';
+            document.getElementById('createAccountForm').style.display = 'none';
+            document.getElementById('toggleToCreate').style.display = 'block';
+            document.getElementById('toggleToSignIn').style.display = 'none';
+            document.getElementById('signInError').style.display = 'none';
+            document.getElementById('createError').style.display = 'none';
+            document.getElementById('signInEmail').focus();
+        }
+
+        // ===== SIGN IN =====
+        async function handleSignIn(event) {
             event.preventDefault();
             
-            const name = document.getElementById('userName').value.trim();
-            const role = document.getElementById('userRole').value.trim() || 'Team Member';
+            const email = document.getElementById('signInEmail').value.trim();
+            const password = document.getElementById('signInPassword').value;
+            const errorEl = document.getElementById('signInError');
+            const submitBtn = event.target.querySelector('button[type="submit"]');
             
+            // Disable button during login
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span>⏳</span> Signing in...';
+            
+            try {
+                // Auto-detect backend URL if on server
+                if (!backendUrl) {
+                    detectBackendUrl();
+                }
+                
+                // Try backend API if we have a URL
+                if (backendUrl) {
+                    try {
+                        const result = await apiLogin(email, password);
+                        
+                        if (result.success && result.user) {
+                            errorEl.style.display = 'none';
+                            const user = {
+                                ...result.user,
+                                avatar: result.user.name.charAt(0).toUpperCase(),
+                                loginTime: new Date().toISOString(),
+                                type: 'registered',
+                                storage: 'dataverse'
+                            };
+                            loginUser(user);
+                            log('Signed in via Dataverse', 'success');
+                            return;
+                        } else if (result.error) {
+                            // API returned an error - could be wrong password or no account
+                            // Fall through to localStorage check
+                            console.log('API login failed, trying localStorage:', result.error);
+                        }
+                    } catch (apiError) {
+                        console.log('API not available, using localStorage:', apiError.message);
+                    }
+                }
+                
+                // Fallback to localStorage
+                const account = findAccount(email);
+                
+                if (!account) {
+                    errorEl.textContent = 'No account found with this email. Please create an account.';
+                    errorEl.style.display = 'block';
+                    return;
+                }
+                
+                if (account.passwordHash !== hashPassword(password)) {
+                    errorEl.textContent = 'Incorrect password. Please try again.';
+                    errorEl.style.display = 'block';
+                    return;
+                }
+                
+                // Success - login with localStorage account
+                errorEl.style.display = 'none';
+                const user = {
+                    name: account.name,
+                    email: account.email,
+                    role: account.role,
+                    avatar: account.name.charAt(0).toUpperCase(),
+                    loginTime: new Date().toISOString(),
+                    type: 'registered',
+                    storage: 'local'
+                };
+                
+                loginUser(user);
+                log('Signed in via local storage', 'info');
+                
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<span>🔐</span> Sign In';
+            }
+        }
+
+        // ===== CREATE ACCOUNT =====
+        async function handleCreateAccount(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById('createName').value.trim();
+            const email = document.getElementById('createEmail').value.trim();
+            const role = document.getElementById('createRole').value.trim() || 'Team Member';
+            const password = document.getElementById('createPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const errorEl = document.getElementById('createError');
+            const submitBtn = event.target.querySelector('button[type="submit"]');
+            
+            // Validation
             if (!name) {
-                alert('Please enter your name');
+                errorEl.textContent = 'Please enter your name.';
+                errorEl.style.display = 'block';
                 return;
             }
             
-            const user = {
-                name: name,
-                role: role,
-                avatar: name.charAt(0).toUpperCase(),
-                loginTime: new Date().toISOString(),
-                type: 'standard'
-            };
+            if (!email) {
+                errorEl.textContent = 'Please enter your email.';
+                errorEl.style.display = 'block';
+                return;
+            }
             
-            loginUser(user);
+            if (password.length < 6) {
+                errorEl.textContent = 'Password must be at least 6 characters.';
+                errorEl.style.display = 'block';
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                errorEl.textContent = 'Passwords do not match.';
+                errorEl.style.display = 'block';
+                return;
+            }
+            
+            // Disable button during registration
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span>⏳</span> Creating account...';
+            
+            try {
+                // Auto-detect backend URL if on server
+                if (!backendUrl) {
+                    detectBackendUrl();
+                }
+                
+                // Try backend API if we have a URL
+                if (backendUrl) {
+                    try {
+                        const result = await apiRegister(name, email, password, role);
+                        
+                        if (result.success && result.user) {
+                            errorEl.style.display = 'none';
+                            const user = {
+                                ...result.user,
+                                avatar: result.user.name.charAt(0).toUpperCase(),
+                                loginTime: new Date().toISOString(),
+                                type: 'registered',
+                                storage: 'dataverse'
+                            };
+                            loginUser(user);
+                            log(`Account created in Dataverse for ${email}`, 'success');
+                            return;
+                        } else if (result.error) {
+                            // Check if it's a "user exists" error - if so, also save locally
+                            if (result.error.includes('already exists')) {
+                                errorEl.textContent = result.error;
+                                errorEl.style.display = 'block';
+                                return;
+                            }
+                            // Other API error - fall through to localStorage
+                            console.log('API registration issue, trying localStorage:', result.error);
+                        }
+                    } catch (apiError) {
+                        console.log('API not available, using localStorage:', apiError.message);
+                    }
+                }
+                
+                // Fallback to localStorage
+                if (findAccount(email)) {
+                    errorEl.textContent = 'An account with this email already exists. Please sign in.';
+                    errorEl.style.display = 'block';
+                    return;
+                }
+                
+                // Create account in localStorage
+                const accountData = {
+                    name: name,
+                    email: email.toLowerCase(),
+                    role: role,
+                    passwordHash: hashPassword(password),
+                    createdAt: new Date().toISOString()
+                };
+                
+                saveAccount(email, accountData);
+                
+                // Success - login the user
+                errorEl.style.display = 'none';
+                const user = {
+                    name: name,
+                    email: email,
+                    role: role,
+                    avatar: name.charAt(0).toUpperCase(),
+                    loginTime: new Date().toISOString(),
+                    type: 'registered',
+                    storage: 'local'
+                };
+                
+                loginUser(user);
+                log(`Account created locally for ${email}`, 'success');
+                
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<span>✨</span> Create Account';
+            }
         }
 
-        function handleMicrosoftLogin() {
-            // TODO: Implement Microsoft SSO
-            // For now, show a placeholder message
-            alert('Microsoft SSO integration coming soon!\n\nFor now, please use the form above or continue as guest.');
-        }
-
+        // ===== GUEST LOGIN =====
         function handleGuestLogin() {
             const user = {
                 name: 'Guest User',
+                email: 'guest@demo.com',
                 role: 'Demo Mode',
                 avatar: '👤',
                 loginTime: new Date().toISOString(),
@@ -4424,11 +5063,12 @@ PM AI Bot
             loginUser(user);
         }
 
+        // ===== LOGIN USER (shared function) =====
         function loginUser(user) {
             currentUser = user;
             
-            // Save to localStorage
-            localStorage.setItem('pmAiUser', JSON.stringify(user));
+            // Save current session
+            localStorage.setItem('pmAiCurrentUser', JSON.stringify(user));
             
             // Update UI
             updateUserProfile(user);
@@ -4441,30 +5081,42 @@ PM AI Bot
             log(`Welcome, ${user.name}! (${user.role})`, 'success');
             
             // Add activity to dashboard
-            addDashboardActivity(`${user.name} signed in`, user.role, 'success');
+            addDashboardActivity(`${user.name} signed in`, user.role, '👤', 'success');
         }
 
+        // ===== LOGOUT =====
         function handleLogout() {
             if (confirm('Are you sure you want to sign out?')) {
-                // Clear user data
+                // Clear current session (but keep account data)
                 currentUser = null;
-                localStorage.removeItem('pmAiUser');
+                localStorage.removeItem('pmAiCurrentUser');
                 
                 // Show login screen, hide app
                 document.getElementById('loginScreen').classList.remove('hidden');
                 document.getElementById('appContainer').classList.add('hidden');
                 
-                // Clear form
-                document.getElementById('userName').value = '';
-                document.getElementById('userRole').value = '';
+                // Clear forms
+                document.getElementById('signInEmail').value = '';
+                document.getElementById('signInPassword').value = '';
+                document.getElementById('createName').value = '';
+                document.getElementById('createEmail').value = '';
+                document.getElementById('createRole').value = '';
+                document.getElementById('createPassword').value = '';
+                document.getElementById('confirmPassword').value = '';
+                
+                // Reset to sign in view
+                showSignIn({ preventDefault: () => {} });
                 
                 // Reset profile display
                 document.getElementById('userAvatar').textContent = '?';
                 document.getElementById('userDisplayName').textContent = 'Not signed in';
                 document.getElementById('userDisplayRole').textContent = 'Guest';
+                
+                log('Signed out successfully', 'info');
             }
         }
 
+        // ===== UPDATE USER PROFILE =====
         function updateUserProfile(user) {
             const avatarEl = document.getElementById('userAvatar');
             const nameEl = document.getElementById('userDisplayName');
@@ -4480,8 +5132,9 @@ PM AI Bot
             roleEl.textContent = user.role;
         }
 
+        // ===== CHECK EXISTING SESSION =====
         function checkExistingSession() {
-            const savedUser = localStorage.getItem('pmAiUser');
+            const savedUser = localStorage.getItem('pmAiCurrentUser');
             
             if (savedUser) {
                 try {
@@ -4496,7 +5149,7 @@ PM AI Bot
                     log(`Welcome back, ${user.name}!`, 'info');
                     return true;
                 } catch (e) {
-                    localStorage.removeItem('pmAiUser');
+                    localStorage.removeItem('pmAiCurrentUser');
                 }
             }
             
@@ -4535,9 +5188,9 @@ PM AI Bot
             
             // If no session, login screen is already visible
             if (!hasSession) {
-                // Focus on name input
+                // Focus on email input
                 setTimeout(() => {
-                    document.getElementById('userName').focus();
+                    document.getElementById('signInEmail').focus();
                 }, 100);
             }
             
@@ -4570,5 +5223,8 @@ PM AI Bot
             originalConnect();
         };
     </script>
+    
+    <!-- WebRTC Audio Module -->
+    <script src="webrtc-audio.js"></script>
 </body>
 </html>

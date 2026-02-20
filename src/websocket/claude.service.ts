@@ -79,7 +79,7 @@ export class ClaudeService {
   };
 
   constructor(private readonly configService: ConfigService) {
-    this.logger.log('Claude Service initialized (with document generation)');
+    this.logger.log('Claude Service initialized (with document generation + vision)');
   }
 
   /**
@@ -183,6 +183,94 @@ export class ClaudeService {
   }
 
   /**
+   * Analyze a screenshot using Claude Vision API
+   * Returns a text description of what's on screen
+   */
+  async analyzeScreenshot(screenshotBase64: string, userQuestion: string): Promise<string> {
+    const apiKey = this.configService.get<string>('CLAUDE_API_KEY');
+    const deployment = this.configService.get<string>('CLAUDE_DEPLOYMENT', 'claude-sonnet-4-20250514');
+    const endpoint = this.configService.get<string>('CLAUDE_ENDPOINT');
+
+    if (!apiKey || !endpoint) {
+      this.logger.error('Claude API not configured for vision');
+      return 'I cannot see your screen right now - vision is not configured.';
+    }
+
+    try {
+      const url = `${endpoint.replace(/\/$/, '')}/anthropic/v1/messages`;
+      
+      this.logger.log(`👁️ Analyzing screenshot with Claude Vision...`);
+      const startTime = Date.now();
+
+      // Determine media type from base64 header or default to png
+      let mediaType = 'image/png';
+      if (screenshotBase64.startsWith('data:')) {
+        const match = screenshotBase64.match(/^data:([^;]+);base64,/);
+        if (match) {
+          mediaType = match[1];
+          screenshotBase64 = screenshotBase64.replace(/^data:[^;]+;base64,/, '');
+        }
+      }
+
+      const requestBody = {
+        model: deployment,
+        max_tokens: 500,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: mediaType,
+                  data: screenshotBase64,
+                },
+              },
+              {
+                type: 'text',
+                text: `You are a helpful PM assistant. The user is sharing their screen with you. Look at this screenshot and answer their question concisely (2-3 sentences max).
+
+User's question: "${userQuestion}"
+
+Describe what you see that's relevant to their question. Be specific about any text, numbers, charts, or data visible on screen. If you can't see something clearly, say so.`,
+              },
+            ],
+          },
+        ],
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error(`Vision API error: ${response.status} - ${errorText}`);
+        return 'I had trouble analyzing your screen. Could you try asking again?';
+      }
+
+      const data = await response.json();
+      const elapsed = Date.now() - startTime;
+      
+      const textBlocks = data.content.filter((block: any) => block.type === 'text');
+      const analysis = textBlocks.map((block: any) => block.text).join('\n');
+
+      this.logger.log(`👁️ Vision analysis complete (${analysis.length} chars) in ${elapsed}ms`);
+      return analysis;
+    } catch (error) {
+      this.logger.error(`Vision analysis error: ${error.message}`);
+      return 'I had trouble seeing your screen. Please try again.';
+    }
+  }
+
+  /**
    * Send a message to Claude - handles both voice responses and document generation
    */
   async chat(
@@ -214,7 +302,6 @@ export class ClaudeService {
 
     // Check if this is a document request
     const docRequest = this.detectDocumentRequest(userMessage);
-    
     if (docRequest) {
       return this.generateDocument(sessionId, userMessage, docRequest, apiKey, deployment, endpoint);
     }
@@ -235,7 +322,7 @@ export class ClaudeService {
     endpoint: string,
   ): Promise<ClaudeResponse> {
     const cachedData = this.getCachedDataCallback ? this.getCachedDataCallback() : 'No case data available.';
-    
+
     const documentPrompts = {
       report: `You are a professional PM assistant creating a status report.
 
